@@ -3,6 +3,7 @@
 //! operators, and exposes a `run`-style entry point used by `api.rs`.
 pub mod ccm;
 pub mod hpmocd;
+pub mod ohpmocd;
 pub mod krm;
 pub mod mmcomo;
 pub mod mocd;

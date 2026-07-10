@@ -53,6 +53,7 @@ published baselines (the original authors released no code).
 |---|---|---|---|---|
 | `scale` | **SCALE** (Santos, in prep.) | KKM / ratio-cut bi-objective, sparse macro–micro co-evolutionary NSGA-II (near-linear, no dense kernel) | label-free **degree-corrected SBM/MDL** description length | 2026 |
 | `hpmocd` | **HP-MOCD** ([Santos et al.](https://doi.org/10.1007/s13278-025-01519-7)) | decomposed modularity, parallel NSGA-II | max modularity *Q* | 2025 |
+| `ohpmocd` | **OHP-MOCD** (experimental fork) | decomposed modularity, NSGA-II; overlap in development | max modularity *Q* (crisp mode) | — |
 | `mmcomo` | **MMCoMO** ([Zhang et al.](https://ieeexplore.ieee.org/document/10188453)) | kernel *k*-means + ratio cut, macro/micro co-evolutionary NSGA-II | max *Q* (front via `mmcomo_fronts`) | 2023 |
 | `ccm` | **CCM** ([Shaik et al.](https://doi.org/10.1007/s42979-020-00382-x)) | score + fitness + modularity, NSGA-III | max *Q* | 2021 |
 | `krm` | **KRM** ([Shaik et al.](https://doi.org/10.1007/s42979-020-00382-x)) | kernel *k*-means + ratio cut + modularity, NSGA-III | max *Q* | 2021 |
@@ -77,6 +78,7 @@ import pymocd
 # Recommended detectors (defaults work out of the box)
 part = pymocd.scale(G)            # SCALE, sparse co-evolution + DC-SBM/MDL selection
 part = pymocd.hpmocd(G)           # HP-MOCD
+part = pymocd.ohpmocd(G)          # OHP-MOCD (experimental; default = crisp HP-MOCD-compatible)
 
 # Baselines (sensible defaults; pop_size / num_gens / rates are tunable kwargs)
 part = pymocd.mocd_q(G)           # Shi-MOCD, max-modularity selection
@@ -120,6 +122,23 @@ alg   = pymocd.Mocd(G)              # Shi-MOCD PESA-II, same pattern
 `HpMocd` additionally supports custom objectives — a list of Python callables
 `(graph, partition) -> float` to minimise instead of the built-in intra/inter
 pair — and a per-generation callback via `set_on_generation`.
+
+**OHP-MOCD** (`ohpmocd`) is an experimental overlapping extension of HP-MOCD.
+With the default `max_memberships_per_node=1` it is crisp-compatible with
+HP-MOCD (same NSGA-II pipeline and max-*Q* selection). Pass an optional `seed`
+for reproducible runs:
+
+```python
+# Crisp mode (HP-MOCD-compatible)
+part = pymocd.ohpmocd(G)
+part = pymocd.ohpmocd(G, max_memberships_per_node=1, seed=42)
+
+# Class interface (overlap parameters reserved for future phases)
+alg = pymocd.OhpMocd(G, max_memberships_per_node=1, seed=42)
+part = alg.run()
+```
+
+Overlapping output (`max_memberships_per_node=2`) is not yet implemented.
 
 Helpers:
 
