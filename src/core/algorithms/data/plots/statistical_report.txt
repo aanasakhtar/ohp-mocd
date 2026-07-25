@@ -1,0 +1,103 @@
+==========================================================================
+OHP-MOCD INITIALIZATION STRATEGY STATISTICAL SIGNIFICANCE REPORT
+==========================================================================
+
+--------------------------------------------------------------------------
+DATASET: LFR_disjoint
+--------------------------------------------------------------------------
+
+[Metric: max_Q]
+  Friedman Test: Statistic = 1.3000, p-value = 5.2205e-01
+  Pair (crisp vs random_overlap): p_raw=2.7736e-01, p_adj=5.5471e-01, Sig=False, Cliff's Delta=0.1900, Cohen's d=0.3948
+  Pair (crisp vs boundary_seeded): p_raw=8.1236e-01, p_adj=8.1236e-01, Sig=False, Cliff's Delta=-0.0400, Cohen's d=-0.0536
+  Pair (random_overlap vs boundary_seeded): p_raw=1.6496e-01, p_adj=4.9487e-01, Sig=False, Cliff's Delta=-0.2450, Cohen's d=-0.4340
+
+[Metric: nmi]
+  Friedman Test: Statistic = 3.1000, p-value = 2.1225e-01
+  Pair (crisp vs random_overlap): p_raw=1.5365e-01, p_adj=4.6094e-01, Sig=False, Cliff's Delta=0.2450, Cohen's d=0.5417
+  Pair (crisp vs boundary_seeded): p_raw=9.2728e-01, p_adj=9.2728e-01, Sig=False, Cliff's Delta=0.0650, Cohen's d=0.0776
+  Pair (random_overlap vs boundary_seeded): p_raw=1.7685e-01, p_adj=3.5371e-01, Sig=False, Cliff's Delta=-0.2200, Cohen's d=-0.4706
+
+[Metric: ami]
+  Friedman Test: Statistic = 2.1000, p-value = 3.4994e-01
+  Pair (crisp vs random_overlap): p_raw=1.2309e-01, p_adj=3.6928e-01, Sig=False, Cliff's Delta=0.2250, Cohen's d=0.5419
+  Pair (crisp vs boundary_seeded): p_raw=9.8544e-01, p_adj=9.8544e-01, Sig=False, Cliff's Delta=0.0250, Cohen's d=0.0282
+  Pair (random_overlap vs boundary_seeded): p_raw=1.2309e-01, p_adj=2.4619e-01, Sig=False, Cliff's Delta=-0.2450, Cohen's d=-0.5168
+
+[Metric: ari]
+  Friedman Test: Statistic = 2.1000, p-value = 3.4994e-01
+  Pair (crisp vs random_overlap): p_raw=1.6496e-01, p_adj=3.2991e-01, Sig=False, Cliff's Delta=0.2050, Cohen's d=0.5128
+  Pair (crisp vs boundary_seeded): p_raw=9.7022e-01, p_adj=9.7022e-01, Sig=False, Cliff's Delta=-0.0050, Cohen's d=0.0021
+  Pair (random_overlap vs boundary_seeded): p_raw=1.1399e-01, p_adj=3.4196e-01, Sig=False, Cliff's Delta=-0.2450, Cohen's d=-0.5101
+
+[Metric: runtime_ms]
+  Friedman Test: Statistic = 3.9000, p-value = 1.4227e-01
+  Pair (crisp vs random_overlap): p_raw=9.8544e-01, p_adj=9.8544e-01, Sig=False, Cliff's Delta=-0.0800, Cohen's d=0.1175
+  Pair (crisp vs boundary_seeded): p_raw=3.6828e-01, p_adj=7.3655e-01, Sig=False, Cliff's Delta=-0.2100, Cohen's d=-0.1247
+  Pair (random_overlap vs boundary_seeded): p_raw=1.4291e-01, p_adj=4.2872e-01, Sig=False, Cliff's Delta=-0.2100, Cohen's d=-0.4148
+--------------------------------------------------------------------------
+DATASET: LFR_overlapping
+--------------------------------------------------------------------------
+
+[Metric: max_Q]
+  Friedman Test: Statistic = 1.3000, p-value = 5.2205e-01
+  Pair (crisp vs random_overlap): p_raw=2.7736e-01, p_adj=5.5471e-01, Sig=False, Cliff's Delta=0.1900, Cohen's d=0.3948
+  Pair (crisp vs boundary_seeded): p_raw=8.1236e-01, p_adj=8.1236e-01, Sig=False, Cliff's Delta=-0.0400, Cohen's d=-0.0536
+  Pair (random_overlap vs boundary_seeded): p_raw=1.6496e-01, p_adj=4.9487e-01, Sig=False, Cliff's Delta=-0.2450, Cohen's d=-0.4340
+
+[Metric: nmi]
+  Friedman Test: Statistic = 4.3000, p-value = 1.1648e-01
+  Pair (crisp vs random_overlap): p_raw=6.3723e-02, p_adj=1.9117e-01, Sig=False, Cliff's Delta=0.3150, Cohen's d=0.6180
+  Pair (crisp vs boundary_seeded): p_raw=8.1236e-01, p_adj=8.1236e-01, Sig=False, Cliff's Delta=0.1025, Cohen's d=0.1064
+  Pair (random_overlap vs boundary_seeded): p_raw=1.4291e-01, p_adj=2.8581e-01, Sig=False, Cliff's Delta=-0.2450, Cohen's d=-0.5047
+
+[Metric: ami]
+  Friedman Test: Statistic = 2.1000, p-value = 3.4994e-01
+  Pair (crisp vs random_overlap): p_raw=7.5851e-02, p_adj=2.2755e-01, Sig=False, Cliff's Delta=0.2800, Cohen's d=0.5814
+  Pair (crisp vs boundary_seeded): p_raw=9.5633e-01, p_adj=9.5633e-01, Sig=False, Cliff's Delta=0.0300, Cohen's d=0.0109
+  Pair (random_overlap vs boundary_seeded): p_raw=1.1399e-01, p_adj=2.2797e-01, Sig=False, Cliff's Delta=-0.2625, Cohen's d=-0.5644
+
+[Metric: ari]
+  Friedman Test: Statistic = 1.9000, p-value = 3.8674e-01
+  Pair (crisp vs random_overlap): p_raw=1.3273e-01, p_adj=3.9818e-01, Sig=False, Cliff's Delta=0.2300, Cohen's d=0.5275
+  Pair (crisp vs boundary_seeded): p_raw=8.6949e-01, p_adj=8.6949e-01, Sig=False, Cliff's Delta=0.0300, Cohen's d=0.0254
+  Pair (random_overlap vs boundary_seeded): p_raw=1.4291e-01, p_adj=2.8581e-01, Sig=False, Cliff's Delta=-0.2350, Cohen's d=-0.5029
+
+[Metric: runtime_ms]
+  Friedman Test: Statistic = 10.3000, p-value = 5.7994e-03
+  Pair (crisp vs random_overlap): p_raw=1.9073e-05, p_adj=5.7220e-05, Sig=True, Cliff's Delta=-0.6450, Cohen's d=-1.2965
+  Pair (crisp vs boundary_seeded): p_raw=7.5851e-02, p_adj=1.5170e-01, Sig=False, Cliff's Delta=-0.3100, Cohen's d=-0.6757
+  Pair (random_overlap vs boundary_seeded): p_raw=4.3043e-01, p_adj=4.3043e-01, Sig=False, Cliff's Delta=0.2100, Cohen's d=0.3264
+--------------------------------------------------------------------------
+DATASET: DBLP
+--------------------------------------------------------------------------
+
+[Metric: max_Q]
+  Friedman Test: Statistic = 8.4000, p-value = 1.4996e-02
+  Pair (crisp vs random_overlap): p_raw=1.3617e-02, p_adj=2.7233e-02, Sig=True, Cliff's Delta=-0.5100, Cohen's d=-0.9312
+  Pair (crisp vs boundary_seeded): p_raw=1.6899e-03, p_adj=5.0697e-03, Sig=True, Cliff's Delta=-0.6250, Cohen's d=-1.3084
+  Pair (random_overlap vs boundary_seeded): p_raw=3.4881e-01, p_adj=3.4881e-01, Sig=False, Cliff's Delta=0.0000, Cohen's d=-0.1960
+
+[Metric: nmi]
+  Friedman Test: Statistic = 2.7000, p-value = 2.5924e-01
+  Pair (crisp vs random_overlap): p_raw=7.9380e-01, p_adj=7.9380e-01, Sig=False, Cliff's Delta=0.0750, Cohen's d=0.0765
+  Pair (crisp vs boundary_seeded): p_raw=1.1686e-01, p_adj=3.5057e-01, Sig=False, Cliff's Delta=-0.3375, Cohen's d=-0.5312
+  Pair (random_overlap vs boundary_seeded): p_raw=1.6496e-01, p_adj=3.2991e-01, Sig=False, Cliff's Delta=-0.3000, Cohen's d=-0.4927
+
+[Metric: ami]
+  Friedman Test: Statistic = 29.2000, p-value = 4.5635e-07
+  Pair (crisp vs random_overlap): p_raw=1.9073e-05, p_adj=3.8147e-05, Sig=True, Cliff's Delta=-0.6750, Cohen's d=-1.3319
+  Pair (crisp vs boundary_seeded): p_raw=3.8147e-06, p_adj=1.1444e-05, Sig=True, Cliff's Delta=-0.9575, Cohen's d=-2.6074
+  Pair (random_overlap vs boundary_seeded): p_raw=2.3251e-03, p_adj=2.3251e-03, Sig=True, Cliff's Delta=-0.5900, Cohen's d=-1.1391
+
+[Metric: ari]
+  Friedman Test: Statistic = 17.2000, p-value = 1.8411e-04
+  Pair (crisp vs random_overlap): p_raw=2.3951e-02, p_adj=2.3951e-02, Sig=True, Cliff's Delta=-0.3425, Cohen's d=-0.7325
+  Pair (crisp vs boundary_seeded): p_raw=3.8147e-06, p_adj=1.1444e-05, Sig=True, Cliff's Delta=-0.8700, Cohen's d=-2.2320
+  Pair (random_overlap vs boundary_seeded): p_raw=4.8194e-03, p_adj=9.6388e-03, Sig=True, Cliff's Delta=-0.5050, Cohen's d=-0.8969
+
+[Metric: runtime_ms]
+  Friedman Test: Statistic = 3.9000, p-value = 1.4227e-01
+  Pair (crisp vs random_overlap): p_raw=7.0118e-01, p_adj=7.0118e-01, Sig=False, Cliff's Delta=0.0550, Cohen's d=0.1547
+  Pair (crisp vs boundary_seeded): p_raw=3.9989e-02, p_adj=7.9979e-02, Sig=False, Cliff's Delta=-0.3300, Cohen's d=-0.6592
+  Pair (random_overlap vs boundary_seeded): p_raw=3.6234e-02, p_adj=1.0870e-01, Sig=False, Cliff's Delta=-0.3600, Cohen's d=-0.7224

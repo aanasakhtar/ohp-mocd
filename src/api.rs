@@ -54,18 +54,19 @@ pub fn hpmocd_fn(py: Python<'_>, graph: &Bound<'_, PyAny>) -> PyResult<Partition
 }
 
 /// Run OHP-MOCD (overlapping NSGA-II extension) with defaults.
-/// With default ``max_memberships_per_node=1``, behaves like HP-MOCD.
-///
-/// Returns ``dict[node, community]``. Isolated nodes get ``-1``.
+/// With default ``max_memberships_per_node=1``, behaves like HP-MOCD (returns dict[node, community]).
+/// With ``max_memberships_per_node > 1``, returns dict[node, list[community]].
 #[gen_stub_pyfunction]
 #[pyfunction]
-#[pyo3(name = "ohpmocd", signature = (graph, max_memberships_per_node = DEFAULT_MAX_MEMBERSHIPS_PER_NODE, seed = None))]
+#[pyo3(name = "ohpmocd", signature = (graph, max_memberships_per_node = DEFAULT_MAX_MEMBERSHIPS_PER_NODE, init_strategy = "crisp", init_overlap_prob = 0.2, seed = None))]
 pub fn ohpmocd_fn(
     py: Python<'_>,
     graph: &Bound<'_, PyAny>,
     max_memberships_per_node: usize,
+    init_strategy: &str,
+    init_overlap_prob: f64,
     seed: Option<u64>,
-) -> PyResult<Partition> {
+) -> PyResult<Py<PyAny>> {
     let instance = OhpMocd::new(
         py,
         graph,
@@ -75,6 +76,8 @@ pub fn ohpmocd_fn(
         OHPMOCD_DEFAULT_CROSS_RATE,
         OHPMOCD_DEFAULT_MUT_RATE,
         max_memberships_per_node,
+        init_strategy,
+        init_overlap_prob,
         seed,
         None,
     )?;

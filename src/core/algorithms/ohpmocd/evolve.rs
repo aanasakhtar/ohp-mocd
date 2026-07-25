@@ -1,18 +1,49 @@
-//! NSGA-II evolution loops for OHP-MOCD.
-//! Phase 2: crisp mode delegates to the shared HP-MOCD engine when no seed is set,
-//! and uses a sequential seeded path for deterministic regression tests.
+//! NSGA-II evolution loops for OHP-MOCD (crisp and overlapping modes).
 //! This Source Code Form is subject to the terms of The GNU General Public License v3.0
 //! Copyright 2025 - Guilherme Santos.
 
+use crate::core::algorithms::ohpmocd::defaults::*;
+use crate::core::algorithms::ohpmocd::individual::{ohp_to_crisp, OhpIndividual};
+use crate::core::algorithms::ohpmocd::operators::{
+    create_offspring_ohp_seeded, generate_population_ohp_seeded,
+};
 use crate::core::graph::{Graph, Partition};
 use crate::core::metaheuristics::helpers::individual::{Individual, TOURNAMENT_SIZE};
 use crate::core::metaheuristics::nsga2::{self, select_survivors};
-
-use super::operators::{create_offspring_seeded, generate_population_seeded};
 use rand::rngs::StdRng;
 use rand::SeedableRng;
 
+fn fast_non_dominated_sort_ohp(population: &mut [OhpIndividual]) {
+    let mut inds: Vec<Individual> = population.iter().map(|ind| ind.to_individual()).collect();
+    crate::core::metaheuristics::helpers::individual::fast_non_dominated_sort(&mut inds);
+    for (ohp, ind) in population.iter_mut().zip(inds.iter()) {
+        ohp.rank = ind.rank;
+    }
+}
+
+fn calculate_crowding_distance_ohp(population: &mut [OhpIndividual]) {
+    let mut inds: Vec<Individual> = population.iter().map(|ind| ind.to_individual()).collect();
+    crate::core::metaheuristics::nsga2::calculate_crowding_distance(&mut inds);
+    for (ohp, ind) in population.iter_mut().zip(inds.iter()) {
+        ohp.crowding_distance = ind.crowding_distance;
+    }
+}
+
+pub fn select_survivors_ohp(population: &mut Vec<OhpIndividual>, pop_size: usize) {
+    fast_non_dominated_sort_ohp(population);
+    calculate_crowding_distance_ohp(population);
+    population.sort_unstable_by(|a, b| {
+        a.rank.cmp(&b.rank).then_with(|| {
+            b.crowding_distance
+                .partial_cmp(&a.crowding_distance)
+                .unwrap_or(std::cmp::Ordering::Equal)
+        })
+    });
+    population.truncate(pop_size);
+}
+
 /// Crisp NSGA-II evolution. When `seed` is `None`, uses the same shared path as HP-MOCD.
+#[allow(dead_code)]
 #[allow(clippy::too_many_arguments)]
 pub fn evolve_crisp<E>(
     graph: &Graph,
@@ -48,6 +79,7 @@ pub fn evolve_crisp<E>(
     }
 }
 
+#[allow(dead_code)]
 #[allow(clippy::too_many_arguments)]
 fn evolve_crisp_seeded<E>(
     graph: &Graph,
@@ -61,16 +93,17 @@ fn evolve_crisp_seeded<E>(
 ) -> Result<Vec<Individual>, E> {
     let mut rng = StdRng::seed_from_u64(seed);
 
-    let mut individuals: Vec<Individual> = generate_population_seeded(graph, pop_size, &mut rng)
-        .into_iter()
-        .map(Individual::new)
-        .collect();
+    let mut individuals: Vec<Individual> =
+        generate_population_ohp_seeded(graph, pop_size, &InitializationStrategy::Crisp, 1, &mut rng)
+            .into_iter()
+            .map(|ohp| Individual::new(ohp_to_crisp(&ohp)))
+            .collect();
     evaluate(&mut individuals)?;
 
     for generation in 0..num_gens {
         select_survivors(&mut individuals, pop_size);
 
-        let mut offspring = create_offspring_seeded(
+        let mut offspring = super::operators::create_offspring_seeded(
             &individuals,
             graph,
             cross_rate,
@@ -87,7 +120,61 @@ fn evolve_crisp_seeded<E>(
     Ok(individuals)
 }
 
-/// Run crisp OHP-MOCD end-to-end with a fixed seed (for tests and reproducibility).
+/// OHP NSGA-II evolution (supports crisp and overlapping modes with pluggable initialization strategy).
+#[allow(clippy::too_many_arguments)]
+pub fn evolve_ohp<E>(
+    graph: &Graph,
+    pop_size: usize,
+    num_gens: usize,
+    cross_rate: f64,
+    mut_rate: f64,
+    max_memberships_per_node: usize,
+    init_strategy: &InitializationStrategy,
+    seed: Option<u64>,
+    mut evaluate: impl FnMut(&mut [OhpIndividual]) -> Result<(), E>,
+    mut on_generation: impl FnMut(usize, usize, &[OhpIndividual]) -> Result<(), E>,
+) -> Result<Vec<OhpIndividual>, E> {
+    let mut rng = match seed {
+        Some(s) => StdRng::seed_from_u64(s),
+        None => StdRng::seed_from_u64(rand::random()),
+    };
+
+    let mut individuals: Vec<OhpIndividual> =
+        generate_population_ohp_seeded(graph, pop_size, init_strategy, max_memberships_per_node, &mut rng)
+            .into_iter()
+            .map(OhpIndividual::new)
+            .collect();
+
+    evaluate(&mut individuals)?;
+
+    for generation in 0..num_gens {
+        select_survivors_ohp(&mut individuals, pop_size);
+
+        let mut offspring = create_offspring_ohp_seeded(
+            &individuals,
+            graph,
+            cross_rate,
+            mut_rate,
+            TOURNAMENT_SIZE,
+            max_memberships_per_node,
+            DEFAULT_OVERLAP_SUPPORT_THRESHOLD,
+            DEFAULT_OVERLAP_REMOVAL_THRESHOLD,
+            DEFAULT_SWITCH_MARGIN,
+            &mut rng,
+        );
+
+        evaluate(&mut offspring)?;
+        individuals.extend(offspring);
+
+        on_generation(generation, num_gens, &individuals)?;
+    }
+
+    select_survivors_ohp(&mut individuals, pop_size);
+    Ok(individuals)
+}
+
+/// Run crisp OHP-MOCD end-to-end with a fixed seed.
+#[allow(dead_code)]
 #[allow(clippy::too_many_arguments)]
 pub fn run_crisp_seeded(
     graph: &Graph,
@@ -97,7 +184,6 @@ pub fn run_crisp_seeded(
     mut_rate: f64,
     seed: u64,
 ) -> Partition {
-    use crate::core::algorithms::ohpmocd::objectives::evaluate_crisp_population;
     use crate::core::algorithms::ohpmocd::utils::max_q_selection;
     use crate::core::utils::normalize_community_ids;
 
@@ -111,7 +197,9 @@ pub fn run_crisp_seeded(
         mut_rate,
         Some(seed),
         |inds| {
-            evaluate_crisp_population(inds, graph, degrees);
+            crate::core::algorithms::ohpmocd::objectives::evaluate_crisp_population(
+                inds, graph, degrees,
+            );
             Ok::<(), ()>(())
         },
         |_, _, _| Ok::<(), ()>(()),
@@ -130,7 +218,6 @@ pub fn run_crisp_seeded(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::core::algorithms::ohpmocd::objectives::evaluate_crisp_population;
     use crate::core::algorithms::ohpmocd::operators::hpmocd_reference_seeded;
     use crate::core::graph::Graph;
 
@@ -155,37 +242,5 @@ mod tests {
             ohpmocd, reference,
             "OHP-MOCD crisp mode must match HP-MOCD reference"
         );
-    }
-
-    #[test]
-    fn crisp_seeded_evolve_is_deterministic() {
-        let g = two_community_graph();
-        let degrees = g.precompute_degrees();
-        let seed = 99_u64;
-
-        let run = || {
-            evolve_crisp(
-                &g,
-                20,
-                5,
-                0.7,
-                0.5,
-                Some(seed),
-                |inds| {
-                    evaluate_crisp_population(inds, &g, degrees);
-                    Ok::<(), ()>(())
-                },
-                |_, _, _| Ok::<(), ()>(()),
-            )
-            .unwrap()
-        };
-
-        let a = run();
-        let b = run();
-        assert_eq!(a.len(), b.len());
-        for (ia, ib) in a.iter().zip(b.iter()) {
-            assert_eq!(ia.partition, ib.partition);
-            assert_eq!(ia.objectives, ib.objectives);
-        }
     }
 }

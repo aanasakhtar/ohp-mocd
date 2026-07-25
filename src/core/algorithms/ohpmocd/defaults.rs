@@ -11,11 +11,28 @@ pub const DEFAULT_MUT_RATE: f64 = 0.5;
 /// Maximum community memberships per node (1 = crisp, compatible with HP-MOCD).
 pub const DEFAULT_MAX_MEMBERSHIPS_PER_NODE: usize = 1;
 
-/// Neighbourhood support threshold for overlap crossover/mutation (Phase 5+).
+/// Neighbourhood support threshold for overlap crossover/mutation.
 pub const DEFAULT_OVERLAP_SUPPORT_THRESHOLD: f64 = 0.25;
 
-/// Support below which a secondary membership is removed (Phase 6+).
+/// Support below which a secondary membership is removed.
 pub const DEFAULT_OVERLAP_REMOVAL_THRESHOLD: f64 = 0.15;
 
-/// Margin required to switch primary membership (Phase 6+).
+/// Margin required to switch primary membership.
 pub const DEFAULT_SWITCH_MARGIN: f64 = 0.2;
+
+/// Population initialization strategies for OHP-MOCD.
+#[derive(Clone, Debug, PartialEq)]
+pub enum InitializationStrategy {
+    /// Crisp initialization: random primary community per node, 0 additional communities.
+    Crisp,
+    /// Random overlap: assigns additional membership to randomly selected nodes.
+    RandomOverlap { overlap_probability: f64 },
+    /// Boundary seeded: identifies candidate boundary nodes and seeds additional membership.
+    BoundarySeeded { overlap_probability: f64 },
+}
+
+impl Default for InitializationStrategy {
+    fn default() -> Self {
+        InitializationStrategy::Crisp
+    }
+}

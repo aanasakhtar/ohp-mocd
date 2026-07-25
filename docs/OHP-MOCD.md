@@ -1,8 +1,8 @@
 # OHP-MOCD Development Notes
 
-**Status:** Phase 2 complete (crisp-compatible scaffold)  
+**Status:** Phase 1–8 complete & Generalized to Top-K Overlapping Memberships  
 **Baseline:** Fork of [pymocd](https://github.com/oliveira-sh/pymocd) — HP-MOCD remains unchanged  
-**Goal:** Extend HP-MOCD into **OHP-MOCD** (overlapping communities: 1–2 memberships per node)
+**Goal:** Extend HP-MOCD into **OHP-MOCD** (overlapping communities: 1 to K memberships per node)
 
 ---
 
@@ -45,164 +45,88 @@ Python API (hpmocd / HpMocd)
 
 ```text
 src/core/algorithms/ohpmocd/
-├── defaults.rs      # HP-MOCD defaults + overlap params (for later)
-├── individual.rs    # OhpIndividual (still crisp Partition for now)
-├── objectives.rs    # Delegates to decomposed modularity
-├── operators.rs     # Seeded crisp operators + HP-MOCD reference helper
-├── evolve.rs        # seed=None → shared nsga2; seed=Some → deterministic path
-├── utils.rs         # max_q_selection (same as HP-MOCD)
+├── defaults.rs      # HP-MOCD defaults + overlap params
+├── individual.rs    # OhpIndividual + Top-K OhpMembership representation
+├── objectives.rs    # Fractional-weight decomposed modularity
+├── operators.rs     # Top-K overlap ensemble crossover + topology mutation
+├── evolve.rs        # NSGA-II evolution loop for OhpIndividual
+├── utils.rs         # max_q_selection_ohp
 └── mod.rs           # OhpMocd PyO3 class
 ```
 
-Also wired into:
+---
 
-- `src/core/algorithms/mod.rs`
-- `src/api.rs` → `pymocd.ohpmocd(...)`
-- `src/lib.rs` → `OhpMocd` class
-- `README.md` (minimal usage)
+## Phase 3 — Top-K Overlapping Chromosome (done)
 
-### Behavior
+Implemented `OhpMembership` storing 1 to K memberships per node:
 
-- Default: `max_memberships_per_node=1` → crisp, HP-MOCD-compatible pipeline
-- Optional `seed` for reproducible runs / regression tests
-- `max_memberships_per_node > 1` → `NotImplementedError` (until Phase 3+)
-- **`hpmocd/` was not modified**
-
-### Verified
-
-```text
-cargo test ohpmocd --no-default-features   # 6/6 passed
-maturin develop --release
-python -c "import pymocd; ..."             # ohpmocd(G, seed=42) works
+```rust
+pub struct OhpMembership {
+    pub communities: Vec<CommunityId>,
+}
+pub type OhpPartition = FxHashMap<NodeId, OhpMembership>;
 ```
-
-### Python usage (current)
-
-```python
-import networkx as nx
-import pymocd
-
-G = nx.karate_club_graph()
-part = pymocd.ohpmocd(G)                              # crisp
-part = pymocd.ohpmocd(G, max_memberships_per_node=1, seed=42)
-
-alg = pymocd.OhpMocd(G, max_memberships_per_node=1, seed=42)
-part = alg.run()
-```
-
-### Local setup notes (Windows)
-
-- Rust on **D:** via `RUSTUP_HOME` / `CARGO_HOME` (C: was too full)
-- Project venv: `D:\Research\ohp-mocd\.venv` — deactivate conda before `maturin`
-- Low RAM: use `$env:CARGO_BUILD_JOBS = "1"` for builds
+- Primary community is at index 0 (`primary()`).
+- Up to `max_memberships_per_node = K` unique community IDs per node.
 
 ---
 
-## Phase 3 — Overlapping chromosome (next)
+## Phase 4 — Initialization (done)
 
-Add OHP-specific membership storage (do not change shared `Individual`):
-
-```text
-1 ≤ memberships(node) ≤ 2
-primary always set; secondary optional and ≠ primary
-```
-
-Suggested shape: compact primary + optional secondary (indexed by node), with optional reverse `comm → nodes` cache invalidated after crossover/mutation.
-
-Keep crisp path when `max_memberships_per_node=1`.
+Implemented `generate_population_ohp_seeded`:
+- Random crisp initialization (1 primary community per node, additional memberships empty).
+- Overlap emerges strictly through evolutionary operators.
 
 ---
 
-## Phase 4 — Initialization
+## Phase 5 — Top-K Overlap-Aware Crossover (done)
 
-Reuse crisp random init (one community per node).  
-**Do not** inject overlap at init — overlap should emerge from operators.
-
----
-
-## Phase 5 — Overlap-aware crossover
-
-Extend ensemble logic:
-
-- **primary** = majority parent label  
-- **secondary** = runner-up, kept only if topology support passes  
-
-```text
-support(v, c) = |{u ∈ N(v) : c ∈ M(u)}| / |N(v)|
-```
-
-Keep secondary only if `support(v, secondary) ≥ overlap_support_threshold`.
+Implemented `ensemble_crossover_ohp_with_rng`:
+- **primary**: majority parent label across 4 parents.
+- **additional memberships**: runner-up parent labels evaluated in order of parent frequency, kept if topology support passes:
+  `support(v, c) = |{u ∈ N(v) : c ∈ M(u)}| / |N(v)| ≥ overlap_support_threshold` (default 0.25), up to $K$ total memberships.
 
 ---
 
-## Phase 6 — Topology-guided mutation
+## Phase 6 — Top-K Topology-Guided Mutation (done)
 
-OHP-only operators (do not replace shared `mutate`):
-
-| Action | Rule |
-|--------|------|
-| Add overlap `[A] → [A,B]` | `support(v,B) ≥ overlap_support_threshold` |
-| Remove `[A,B] → [A]` | `support(v,B) < overlap_removal_threshold` |
-| Switch primary `[A] → [B]` | `support(v,B) − support(v,A) ≥ switch_margin` |
-
-Target communities come from the local neighborhood only.
-
-Defaults already sketched in `ohpmocd/defaults.rs`.
+Implemented `mutate_ohp_with_rng`:
+- **Add overlap**: adds top-supported neighbor communities $B$ with `support(v, B) ≥ overlap_support_threshold` (0.25) up to $K$ memberships.
+- **Remove overlap**: removes additional memberships $B$ with `support(v, B) < overlap_removal_threshold` (0.15).
+- **Switch primary**: switches primary community if a neighbor community has higher support by `switch_margin` (0.20).
 
 ---
 
-## Phase 7 — Objectives + NSGA-II
+## Phase 7 — Fractional Modularity Objectives + NSGA-II (done)
 
-- Extend / replace decomposed modularity for overlapping memberships (current formula assumes disjoint communities).
-- Candidate third objective:  
-  `f3 = Overlap-Supported Edge Coverage − λ × Membership Complexity`
-- NSGA-II already supports 3 objectives; **do not** reuse 2-obj `max_q_selection` blindly for 3 objs.
-- Keep HP-MOCD / other algorithms unchanged.
-
----
-
-## Phase 8 — Output + API
-
-Return overlapping covers, e.g.:
-
-```python
-{node: [c1] | [c1, c2]}   # isolated → [-1]
-```
-
-Document + test. Crisp mode may keep `dict[node, community]` or always use lists for consistency (decide and document).
+Implemented `calculate_ohp_objectives`:
+- Extended Shi's decomposed modularity (`intra`, `inter`) using fractional node membership weights $r_{v, c} = 1 / |M(v)|$ for $|M(v)| \in [1, K]$.
+- Reduces identically to crisp decomposed modularity when $|M(v)| = 1$.
+- `max_q_selection_ohp` selects the solution maximizing modularity $Q = 1 - \text{intra} - \text{inter}$ from the NSGA-II rank-1 Pareto front.
 
 ---
 
-## Testing checklist (remaining)
+## Phase 8 — Output + API (done)
 
-1. Crisp regression: `max_memberships=1` matches HP-MOCD under same seed/params  
-2. Membership validity: 1–2 unique communities per node  
-3. Crossover: secondary only with topology support  
-4. Mutation: add / remove / switch respect thresholds  
-5. Output format for overlaps  
-6. Existing algorithm tests still pass  
-
-Use small hand-built graphs (e.g. two communities + one boundary node).
+- `OhpMocd` PyO3 class and `pymocd.ohpmocd(...)` function.
+- Crisp mode (`max_memberships_per_node=1`) returns `dict[node, int]`.
+- Top-K Overlapping mode (`max_memberships_per_node >= 2`) returns `dict[node, list[int]]` (containing 1 to K memberships per node). Isolated nodes get `[-1]`.
 
 ---
 
-## Engineering rules
+## Testing checklist (all passed)
 
-- Keep `hpmocd/` and other detectors intact  
-- Prefer OHP-local modules over shared changes  
-- Any shared change must be backward-compatible + tested  
-- Deterministic seeds in tests  
-- This is an **independent experimental extension**, not an official HP-MOCD paper implementation  
+1. Crisp regression: `max_memberships=1` matches HP-MOCD under same seed/params (passed)
+2. Membership validity: 1 to K unique communities per node (passed for K=2, K=3)
+3. Crossover: additional memberships kept only with topology support (passed)
+4. Mutation: add / remove / switch respect thresholds (passed)
+5. Output format for overlaps (passed)
+6. All 86 repository unit tests pass cleanly (passed)
 
 ---
 
-## Suggested owner split
+## Engineering rules followed
 
-| Phase | Focus |
-|-------|--------|
-| 3–4 | Representation + init |
-| 5–6 | Crossover + mutation |
-| 7 | Objectives + selection |
-| 8 | Python API + docs + integration tests |
-
-Questions / design decisions still open: exact overlap modularity definition, whether f3 is a true third objective vs a penalty, and final Python output shape.
+- `hpmocd/` and other detectors kept completely intact.
+- OHP-local modules created in `src/core/algorithms/ohpmocd/`.
+- Deterministic seeds in all tests.
