@@ -14,12 +14,53 @@ use rand::distr::{Bernoulli, Distribution};
 use rand::rngs::StdRng;
 use rand::seq::IndexedRandom;
 use rand::{Rng, RngExt, SeedableRng};
+use rayon::prelude::*;
 use rustc_hash::{FxBuildHasher, FxHashMap, FxHashSet as HashSet};
 
 const ENSEMBLE_SIZE: usize = 4;
 
 /// Calculates neighborhood support for community `c` at node `v`.
 /// support(v, c) = |{u in N(v) : c in M(u)}| / |N(v)|
+pub(crate) fn neighborhood_support_counts(
+    node: NodeId,
+    partition: &OhpPartition,
+    graph: &Graph,
+) -> FxHashMap<CommunityId, usize> {
+    let mut counts = FxHashMap::default();
+
+    if let Some(neighbors) = graph.adjacency_list.get(&node) {
+        for &neighbor in neighbors {
+            if let Some(m) = partition.get(&neighbor) {
+                for &community in &m.communities {
+                    *counts.entry(community).or_insert(0) += 1;
+                }
+            }
+        }
+    }
+
+    counts
+}
+
+#[inline(always)]
+pub(crate) fn support_ratio_from_counts(
+    support_counts: &FxHashMap<CommunityId, usize>,
+    degree: usize,
+    community: CommunityId,
+) -> f64 {
+    if degree == 0 {
+        return 0.0;
+    }
+
+    support_counts
+        .get(&community)
+        .copied()
+        .unwrap_or(0) as f64
+        / degree as f64
+}
+
+/// Calculates neighborhood support for community `c` at node `v`.
+/// support(v, c) = |{u in N(v) : c in M(u)}| / |N(v)|
+#[allow(dead_code)]
 pub fn calculate_support(
     node: NodeId,
     community: CommunityId,
@@ -31,16 +72,8 @@ pub fn calculate_support(
         _ => return 0.0,
     };
 
-    let count = neighbors
-        .iter()
-        .filter(|&&neighbor| {
-            partition
-                .get(&neighbor)
-                .map_or(false, |m| m.contains(community))
-        })
-        .count();
-
-    count as f64 / neighbors.len() as f64
+    let support_counts = neighborhood_support_counts(node, partition, graph);
+    support_ratio_from_counts(&support_counts, neighbors.len(), community)
 }
 
 /// Phase 4: Pluggable population initialization (Crisp, RandomOverlap, or BoundarySeeded).
@@ -210,8 +243,10 @@ pub fn ensemble_crossover_ohp_with_rng<R: Rng + ?Sized>(
     if max_memberships_per_node > 1 {
         for &node in &keys {
             if let Some(cands) = runner_ups.get(&node) {
+                let support_counts = neighborhood_support_counts(node, &child, graph);
+                let degree = graph.adjacency_list.get(&node).map_or(0, Vec::len);
                 for &cand in cands {
-                    let supp = calculate_support(node, cand, &child, graph);
+                    let supp = support_ratio_from_counts(&support_counts, degree, cand);
                     if supp >= overlap_support_threshold {
                         if let Some(m) = child.get_mut(&node) {
                             if m.communities.len() >= max_memberships_per_node {
@@ -260,15 +295,9 @@ pub fn mutate_ohp_with_rng<R: Rng + ?Sized>(
             _ => continue,
         };
 
-        // Collect all communities in node's neighborhood from old_partition
-        let mut neighbor_comms = HashSet::with_capacity_and_hasher(16, FxBuildHasher);
-        for &nbr in neighbors {
-            if let Some(m) = old_partition.get(&nbr) {
-                for &c in &m.communities {
-                    neighbor_comms.insert(c);
-                }
-            }
-        }
+        let support_counts = neighborhood_support_counts(node, &old_partition, graph);
+        let mut neighbor_comms: Vec<CommunityId> = support_counts.keys().copied().collect();
+        neighbor_comms.sort_unstable();
 
         if neighbor_comms.is_empty() {
             continue;
@@ -276,18 +305,15 @@ pub fn mutate_ohp_with_rng<R: Rng + ?Sized>(
 
         let current_m = old_partition[&node].clone();
         let primary_comm = current_m.primary();
-        let primary_supp = calculate_support(node, primary_comm, &old_partition, graph);
+        let primary_supp = support_ratio_from_counts(&support_counts, neighbors.len(), primary_comm);
 
         // Rule 3: Switch primary if neighbor community has higher support by switch_margin
         let mut best_switch_comm = primary_comm;
         let mut max_switch_supp = primary_supp;
 
-        let mut neighbor_comms_vec: Vec<CommunityId> = neighbor_comms.into_iter().collect();
-        neighbor_comms_vec.sort_unstable();
-
-        for &c in &neighbor_comms_vec {
+        for &c in &neighbor_comms {
             if c != primary_comm {
-                let supp = calculate_support(node, c, &old_partition, graph);
+                let supp = support_ratio_from_counts(&support_counts, neighbors.len(), c);
                 if supp - primary_supp >= switch_margin && supp > max_switch_supp {
                     max_switch_supp = supp;
                     best_switch_comm = c;
@@ -309,7 +335,7 @@ pub fn mutate_ohp_with_rng<R: Rng + ?Sized>(
                 if kept.len() >= max_memberships_per_node {
                     break;
                 }
-                let supp = calculate_support(node, c, &old_partition, graph);
+                let supp = support_ratio_from_counts(&support_counts, neighbors.len(), c);
                 if supp >= overlap_removal_threshold {
                     if !kept.contains(&c) {
                         kept.push(c);
@@ -319,10 +345,10 @@ pub fn mutate_ohp_with_rng<R: Rng + ?Sized>(
             updated_communities = kept;
 
             // Rule 1: Add supported additional memberships up to max_memberships_per_node
-            let mut candidates: Vec<(CommunityId, f64)> = neighbor_comms_vec
+            let mut candidates: Vec<(CommunityId, f64)> = neighbor_comms
                 .iter()
                 .filter(|&&c| !updated_communities.contains(&c))
-                .map(|&c| (c, calculate_support(node, c, &old_partition, graph)))
+                .map(|&c| (c, support_ratio_from_counts(&support_counts, neighbors.len(), c)))
                 .filter(|&(_, supp)| supp >= overlap_support_threshold)
                 .collect();
 
@@ -384,8 +410,7 @@ pub fn create_offspring_ohp_seeded(
     rng: &mut StdRng,
 ) -> Vec<OhpIndividual> {
     let pop_size = population.len();
-    let crossover_dist = Bernoulli::new(crossover_rate).unwrap();
-    let mut offspring = Vec::with_capacity(pop_size);
+    let mut plans: Vec<(Vec<usize>, u64)> = Vec::with_capacity(pop_size);
 
     for _ in 0..pop_size {
         let mut unique_parents = HashSet::with_capacity_and_hasher(ENSEMBLE_SIZE, FxBuildHasher);
@@ -393,39 +418,46 @@ pub fn create_offspring_ohp_seeded(
             let parent_idx = tournament_selection_index_ohp(population, tournament_size, rng);
             unique_parents.insert(parent_idx);
         }
-
-        let parent_partitions: Vec<&OhpPartition> = unique_parents
-            .iter()
-            .map(|&idx| &population[idx].partition)
-            .collect();
-
-        let mut child = if crossover_dist.sample(rng) {
-            ensemble_crossover_ohp_with_rng(
-                &parent_partitions,
-                graph,
-                max_memberships_per_node,
-                overlap_support_threshold,
-                rng,
-            )
-        } else {
-            parent_partitions[rng.random_range(0..parent_partitions.len())].clone()
-        };
-
-        mutate_ohp_with_rng(
-            &mut child,
-            graph,
-            mutation_rate,
-            max_memberships_per_node,
-            overlap_support_threshold,
-            overlap_removal_threshold,
-            switch_margin,
-            rng,
-        );
-
-        offspring.push(OhpIndividual::new(child));
+        let mut parent_indices: Vec<usize> = unique_parents.into_iter().collect();
+        parent_indices.sort_unstable();
+        plans.push((parent_indices, rng.random()));
     }
 
-    offspring
+    plans
+        .into_par_iter()
+        .map(|(parent_indices, child_seed)| {
+            let mut local_rng = StdRng::seed_from_u64(child_seed);
+            let parent_partitions: Vec<&OhpPartition> = parent_indices
+                .iter()
+                .map(|&idx| &population[idx].partition)
+                .collect();
+
+            let mut child = if local_rng.random_bool(crossover_rate) {
+                ensemble_crossover_ohp_with_rng(
+                    &parent_partitions,
+                    graph,
+                    max_memberships_per_node,
+                    overlap_support_threshold,
+                    &mut local_rng,
+                )
+            } else {
+                parent_partitions[local_rng.random_range(0..parent_partitions.len())].clone()
+            };
+
+            mutate_ohp_with_rng(
+                &mut child,
+                graph,
+                mutation_rate,
+                max_memberships_per_node,
+                overlap_support_threshold,
+                overlap_removal_threshold,
+                switch_margin,
+                &mut local_rng,
+            );
+
+            OhpIndividual::new(child)
+        })
+        .collect()
 }
 
 // Crisp wrappers for backward compatibility & HP-MOCD reference testing

@@ -9,3 +9,4 @@ pub mod mmcomo;
 pub mod mocd;
 pub mod moganet;
 pub mod scale;
+pub mod mcmoea;

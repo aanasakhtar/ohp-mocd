@@ -8,21 +8,39 @@ use crate::core::algorithms::ohpmocd::operators::{
     create_offspring_ohp_seeded, generate_population_ohp_seeded,
 };
 use crate::core::graph::{Graph, Partition};
-use crate::core::metaheuristics::helpers::individual::{Individual, TOURNAMENT_SIZE};
+use crate::core::metaheuristics::helpers::individual::{fast_non_dominated_sort, Individual, TOURNAMENT_SIZE};
 use crate::core::metaheuristics::nsga2::{self, select_survivors};
 use rand::rngs::StdRng;
 use rand::SeedableRng;
+use rustc_hash::FxHashMap;
+use std::cmp::Ordering;
 
 fn fast_non_dominated_sort_ohp(population: &mut [OhpIndividual]) {
-    let mut inds: Vec<Individual> = population.iter().map(|ind| ind.to_individual()).collect();
-    crate::core::metaheuristics::helpers::individual::fast_non_dominated_sort(&mut inds);
+    let mut inds: Vec<Individual> = population
+        .iter()
+        .map(|ind| Individual {
+            partition: FxHashMap::default(),
+            objectives: ind.objectives.clone(),
+            rank: ind.rank,
+            crowding_distance: ind.crowding_distance,
+        })
+        .collect();
+    fast_non_dominated_sort(&mut inds);
     for (ohp, ind) in population.iter_mut().zip(inds.iter()) {
         ohp.rank = ind.rank;
     }
 }
 
 fn calculate_crowding_distance_ohp(population: &mut [OhpIndividual]) {
-    let mut inds: Vec<Individual> = population.iter().map(|ind| ind.to_individual()).collect();
+    let mut inds: Vec<Individual> = population
+        .iter()
+        .map(|ind| Individual {
+            partition: FxHashMap::default(),
+            objectives: ind.objectives.clone(),
+            rank: ind.rank,
+            crowding_distance: ind.crowding_distance,
+        })
+        .collect();
     crate::core::metaheuristics::nsga2::calculate_crowding_distance(&mut inds);
     for (ohp, ind) in population.iter_mut().zip(inds.iter()) {
         ohp.crowding_distance = ind.crowding_distance;
@@ -36,7 +54,7 @@ pub fn select_survivors_ohp(population: &mut Vec<OhpIndividual>, pop_size: usize
         a.rank.cmp(&b.rank).then_with(|| {
             b.crowding_distance
                 .partial_cmp(&a.crowding_distance)
-                .unwrap_or(std::cmp::Ordering::Equal)
+                .unwrap_or(Ordering::Equal)
         })
     });
     population.truncate(pop_size);
@@ -130,8 +148,11 @@ pub fn evolve_ohp<E>(
     mut_rate: f64,
     max_memberships_per_node: usize,
     init_strategy: &InitializationStrategy,
+    overlap_support_threshold: f64,
+    overlap_removal_threshold: f64,
+    switch_margin: f64,
     seed: Option<u64>,
-    mut evaluate: impl FnMut(&mut [OhpIndividual]) -> Result<(), E>,
+    mut evaluate: impl FnMut(usize, &mut [OhpIndividual]) -> Result<(), E>,
     mut on_generation: impl FnMut(usize, usize, &[OhpIndividual]) -> Result<(), E>,
 ) -> Result<Vec<OhpIndividual>, E> {
     let mut rng = match seed {
@@ -145,7 +166,7 @@ pub fn evolve_ohp<E>(
             .map(OhpIndividual::new)
             .collect();
 
-    evaluate(&mut individuals)?;
+    evaluate(0, &mut individuals)?;
 
     for generation in 0..num_gens {
         select_survivors_ohp(&mut individuals, pop_size);
@@ -157,13 +178,13 @@ pub fn evolve_ohp<E>(
             mut_rate,
             TOURNAMENT_SIZE,
             max_memberships_per_node,
-            DEFAULT_OVERLAP_SUPPORT_THRESHOLD,
-            DEFAULT_OVERLAP_REMOVAL_THRESHOLD,
-            DEFAULT_SWITCH_MARGIN,
+            overlap_support_threshold,
+            overlap_removal_threshold,
+            switch_margin,
             &mut rng,
         );
 
-        evaluate(&mut offspring)?;
+        evaluate(generation, &mut offspring)?;
         individuals.extend(offspring);
 
         on_generation(generation, num_gens, &individuals)?;

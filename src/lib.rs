@@ -6,12 +6,13 @@ use pyo3::prelude::*;
 mod api;
 pub mod core;
 use api::{
-    ccm_fn, dcsbm_full_mdl_fn, dcsbm_mdl_fn, gt_metrics_fn, hpmocd_fn, krm_fn, mmcomo_fn,
+    ccm_fn, dcsbm_full_mdl_fn, dcsbm_mdl_fn, gt_metrics_fn, hpmocd_fn, krm_fn, mcmoea_fn, mmcomo_fn,
     mmcomo_fronts_fn, mocd_d_fn, mocd_q_fn, moga_net_fn, ohpmocd_fn, sbm_mdl_fn, scale_fn,
     scale_fronts_fn, scale_fronts_raw_fn,
 };
 use core::algorithms::hpmocd::HpMocd;
 use core::algorithms::ohpmocd::OhpMocd;
+use core::algorithms::mcmoea::Mcmoea;
 use core::algorithms::mocd::Mocd;
 use core::xfeats::{fitness, set_thread_count};
 
@@ -24,6 +25,7 @@ fn pymocd(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(fitness, m)?)?;
     m.add_function(wrap_pyfunction!(hpmocd_fn, m)?)?;
     m.add_function(wrap_pyfunction!(ohpmocd_fn, m)?)?;
+    m.add_function(wrap_pyfunction!(mcmoea_fn, m)?)?;
     m.add_function(wrap_pyfunction!(mocd_q_fn, m)?)?;
     m.add_function(wrap_pyfunction!(mocd_d_fn, m)?)?;
     m.add_function(wrap_pyfunction!(moga_net_fn, m)?)?;
@@ -32,7 +34,6 @@ fn pymocd(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(mmcomo_fn, m)?)?;
     m.add_function(wrap_pyfunction!(mmcomo_fronts_fn, m)?)?;
     m.add_function(wrap_pyfunction!(scale_fn, m)?)?;
-    m.add_function(wrap_pyfunction!(scale_fronts_fn, m)?)?;
     m.add_function(wrap_pyfunction!(scale_fronts_raw_fn, m)?)?;
     m.add_function(wrap_pyfunction!(sbm_mdl_fn, m)?)?;
     m.add_function(wrap_pyfunction!(dcsbm_mdl_fn, m)?)?;
@@ -40,6 +41,7 @@ fn pymocd(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(gt_metrics_fn, m)?)?;
     m.add_class::<HpMocd>()?;
     m.add_class::<OhpMocd>()?;
+    m.add_class::<Mcmoea>()?;
     m.add_class::<Mocd>()?;
     Ok(())
 }

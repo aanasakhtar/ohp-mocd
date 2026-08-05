@@ -100,6 +100,12 @@ pub struct OhpMocd {
     mut_rate: f64,
     max_memberships_per_node: usize,
     init_strategy: InitializationStrategy,
+    overlap_support_threshold: f64,
+    overlap_removal_threshold: f64,
+    switch_margin: f64,
+    enable_f3: bool,
+    target_overlap_rate: f64,
+    alpha: f64,
     seed: Option<u64>,
     py_graph: Option<Py<PyAny>>,
     py_objectives: Vec<Py<PyAny>>,
@@ -114,9 +120,18 @@ impl OhpMocd {
         individuals: &mut [OhpIndividual],
         graph: &Graph,
         degrees: &HashMap<i32, usize, FxBuildHasher>,
+        phase1_active: bool,
     ) -> PyResult<()> {
         if self.py_objectives.is_empty() {
-            evaluate_ohp_population(individuals, graph, degrees);
+            evaluate_ohp_population(
+                individuals,
+                graph,
+                degrees,
+                self.enable_f3,
+                self.target_overlap_rate,
+                self.alpha,
+                phase1_active,
+            );
             Ok(())
         } else {
             let py = py.expect("Python token required when py_objectives are set");
@@ -150,6 +165,8 @@ impl OhpMocd {
             hist.clear();
         }
 
+        let phase1_gens = (self.num_gens as f64 * DEFAULT_PHASE1_RATIO) as usize;
+
         let individuals = evolve_ohp(
             &self.graph,
             self.pop_size,
@@ -158,8 +175,14 @@ impl OhpMocd {
             self.mut_rate,
             self.max_memberships_per_node,
             &self.init_strategy,
+            self.overlap_support_threshold,
+            self.overlap_removal_threshold,
+            self.switch_margin,
             self.seed,
-            |inds| self.evaluate_population(py, inds, &self.graph, degrees),
+            |generation, inds| {
+                let phase1_active = generation < phase1_gens;
+                self.evaluate_population(py, inds, &self.graph, degrees, phase1_active)
+            },
             |generation, num_gens, pop| {
                 let rank1_solutions: Vec<&OhpIndividual> =
                     pop.iter().filter(|ind| ind.rank == 1).collect();
@@ -206,15 +229,20 @@ impl OhpMocd {
 #[pymethods]
 impl OhpMocd {
     #[new]
-    #[pyo3(signature = (graph,
-        debug_level = DEFAULT_DEBUG_LEVEL,
-        pop_size = DEFAULT_POP_SIZE,
-        num_gens = DEFAULT_NUM_GENS,
-        cross_rate = DEFAULT_CROSS_RATE,
-        mut_rate = DEFAULT_MUT_RATE,
-        max_memberships_per_node = DEFAULT_MAX_MEMBERSHIPS_PER_NODE,
-        init_strategy = "crisp",
-        init_overlap_prob = 0.2,
+    #[pyo3(signature = (
+        graph,
+        *,
+        debug_level = 0,
+        pop_size = 100,
+        num_gens = 100,
+        cross_rate = 0.7,
+        mut_rate = 0.5,
+        max_memberships_per_node = 3,
+        init_strategy = "boundary_seeded",
+        init_overlap_prob = 0.4,
+        overlap_support_threshold = 0.15,
+        overlap_removal_threshold = 0.08,
+        switch_margin = 0.05,
         seed = None,
         objectives = None
     ))]
@@ -230,6 +258,9 @@ impl OhpMocd {
         max_memberships_per_node: usize,
         init_strategy: &str,
         init_overlap_prob: f64,
+        overlap_support_threshold: f64,
+        overlap_removal_threshold: f64,
+        switch_margin: f64,
         seed: Option<u64>,
         objectives: Option<&Bound<'_, PyList>>,
     ) -> PyResult<Self> {
@@ -261,6 +292,10 @@ impl OhpMocd {
             .map(|obj_list| obj_list.iter().map(|item| item.unbind()).collect())
             .unwrap_or_default();
 
+        let enable_f3 = max_memberships_per_node >= 2;
+        let target_overlap_rate = DEFAULT_TARGET_OVERLAP_RATE;
+        let alpha = DEFAULT_ALPHA;
+
         Ok(OhpMocd {
             graph: rust_graph,
             debug_level,
@@ -270,6 +305,12 @@ impl OhpMocd {
             mut_rate,
             max_memberships_per_node,
             init_strategy: strat,
+            overlap_support_threshold,
+            overlap_removal_threshold,
+            switch_margin,
+            enable_f3,
+            target_overlap_rate,
+            alpha,
             seed,
             py_graph,
             py_objectives,
@@ -336,10 +377,7 @@ impl OhpMocd {
 mod tests {
     use super::*;
     use crate::core::algorithms::ohpmocd::evolve::{evolve_ohp, run_crisp_seeded};
-    use crate::core::algorithms::ohpmocd::operators::{
-        ensemble_crossover_ohp_with_rng, hpmocd_reference_seeded, mutate_ohp_with_rng,
-    };
-    use rand::SeedableRng;
+    use crate::core::algorithms::ohpmocd::operators::hpmocd_reference_seeded;
 
     fn two_community_graph() -> Graph {
         let mut g = Graph::new();
@@ -382,9 +420,20 @@ mod tests {
             0.5,
             3,
             &InitializationStrategy::Crisp,
+            DEFAULT_OVERLAP_SUPPORT_THRESHOLD,
+            DEFAULT_OVERLAP_REMOVAL_THRESHOLD,
+            DEFAULT_SWITCH_MARGIN,
             Some(42),
-            |inds| {
-                objectives::evaluate_ohp_population(inds, &g, &degrees);
+            |_, inds| {
+                objectives::evaluate_ohp_population(
+                    inds,
+                    &g,
+                    &degrees,
+                    false,
+                    DEFAULT_TARGET_OVERLAP_RATE,
+                    DEFAULT_ALPHA,
+                    true,
+                );
                 Ok::<(), ()>(())
             },
             |_, _, _| Ok::<(), ()>(()),
@@ -423,9 +472,20 @@ mod tests {
                 0.5,
                 2,
                 &strat,
+                DEFAULT_OVERLAP_SUPPORT_THRESHOLD,
+                DEFAULT_OVERLAP_REMOVAL_THRESHOLD,
+                DEFAULT_SWITCH_MARGIN,
                 Some(42),
-                |inds| {
-                    objectives::evaluate_ohp_population(inds, &g, &degrees);
+                |_, inds| {
+                    objectives::evaluate_ohp_population(
+                        inds,
+                        &g,
+                        &degrees,
+                        false,
+                        DEFAULT_TARGET_OVERLAP_RATE,
+                        DEFAULT_ALPHA,
+                        true,
+                    );
                     Ok::<(), ()>(())
                 },
                 |_, _, _| Ok::<(), ()>(()),

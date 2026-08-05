@@ -58,13 +58,26 @@ pub fn hpmocd_fn(py: Python<'_>, graph: &Bound<'_, PyAny>) -> PyResult<Partition
 /// With ``max_memberships_per_node > 1``, returns dict[node, list[community]].
 #[gen_stub_pyfunction]
 #[pyfunction]
-#[pyo3(name = "ohpmocd", signature = (graph, max_memberships_per_node = DEFAULT_MAX_MEMBERSHIPS_PER_NODE, init_strategy = "crisp", init_overlap_prob = 0.2, seed = None))]
+#[pyo3(name = "ohpmocd", signature = (
+    graph,
+    *,
+    max_memberships_per_node = DEFAULT_MAX_MEMBERSHIPS_PER_NODE,
+    init_strategy = "boundary_seeded",
+    init_overlap_prob = 0.4,
+    overlap_support_threshold = 0.15,
+    overlap_removal_threshold = 0.08,
+    switch_margin = 0.05,
+    seed = None
+))]
 pub fn ohpmocd_fn(
     py: Python<'_>,
     graph: &Bound<'_, PyAny>,
     max_memberships_per_node: usize,
     init_strategy: &str,
     init_overlap_prob: f64,
+    overlap_support_threshold: f64,
+    overlap_removal_threshold: f64,
+    switch_margin: f64,
     seed: Option<u64>,
 ) -> PyResult<Py<PyAny>> {
     let instance = OhpMocd::new(
@@ -78,10 +91,38 @@ pub fn ohpmocd_fn(
         max_memberships_per_node,
         init_strategy,
         init_overlap_prob,
+        overlap_support_threshold,
+        overlap_removal_threshold,
+        switch_margin,
         seed,
         None,
     )?;
     instance.run(py)
+}
+
+use crate::core::algorithms::mcmoea::Mcmoea;
+
+/// Run MCMOEA (Wen et al. 2016) — Maximal Clique-based Multi-Objective Evolutionary Algorithm in Rust.
+/// Returns dict[node, list[community]].
+#[gen_stub_pyfunction]
+#[pyfunction]
+#[pyo3(name = "mcmoea", signature = (graph, pop_size = 100, num_gens = 100, cross_rate = 0.8, mut_rate = 0.2, seed = None))]
+pub fn mcmoea_fn(
+    py: Python<'_>,
+    graph: &Bound<'_, PyAny>,
+    pop_size: usize,
+    num_gens: usize,
+    cross_rate: f64,
+    mut_rate: f64,
+    seed: Option<u64>,
+) -> PyResult<Py<PyAny>> {
+    let mut instance = Mcmoea::new(py, graph, pop_size, num_gens, cross_rate, mut_rate, seed)?;
+    let result = instance.run()?;
+    let dict = PyDict::new(py);
+    for (k, v) in result {
+        dict.set_item(k, v)?;
+    }
+    Ok(dict.into_any().unbind())
 }
 
 /// Run Shi-MOCD (Shi, Yan, Cai, Wu 2012) — PESA-II over Shi's
