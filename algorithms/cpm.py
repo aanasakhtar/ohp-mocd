@@ -7,6 +7,7 @@ from __future__ import annotations
 import time
 from collections import Counter
 import networkx as nx
+from evaluation.metrics import _cover_to_hard_partition
 
 
 def _clique_percolation(G: nx.Graph, k: int) -> list[frozenset]:
@@ -79,7 +80,8 @@ def run_cpm_ncn_fixed(
     for k in k_values:
         partition = _clique_percolation(G, k)
         if partition:
-            mod = nx.community.modularity(G, partition)
+            hard_part = _cover_to_hard_partition(partition, G=G)
+            mod = nx.community.modularity(G, hard_part)
         else:
             mod = -1.0
         if mod > best_modularity:
