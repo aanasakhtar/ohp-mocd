@@ -67,17 +67,26 @@ def _cover_to_hard_partition(
     communities: list[frozenset],
     G: nx.Graph | None = None,
 ) -> list[frozenset]:
-    nodes = list(set().union(*communities)) if communities else []
+    """
+    Project an overlapping cover to a disjoint hard partition covering 100% of nodes in G.
+    """
+    if G is not None:
+        nodes = list(G.nodes())
+    else:
+        nodes = list(set().union(*communities)) if communities else []
+
     node_idx = {v: i for i, v in enumerate(nodes)}
     labels = _cover_to_label_array_support_based(communities, nodes, G=G)
 
     groups: dict[int, set] = {}
-    for v, idx in node_idx.items():
+    for idx, v in enumerate(nodes):
         cid = int(labels[idx])
         if cid >= 0:
             groups.setdefault(cid, set()).add(v)
+        else:
+            groups.setdefault(-1000000 - idx, set()).add(v)
 
-    return [frozenset(nodes) for _cid, nodes in sorted(groups.items())]
+    return [frozenset(members) for members in groups.values() if members]
 
 
 def _is_overlapping(communities: list[frozenset]) -> bool:
