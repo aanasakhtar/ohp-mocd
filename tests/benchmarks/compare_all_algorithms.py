@@ -1,24 +1,20 @@
 """
-compare_all_algorithms.py — Overlapping Community Detection Benchmark Suite.
+compare_all_algorithms.py — Comprehensive Benchmark Suite for Overlapping Community Detection.
 
-Executes and compares overlapping and disjoint community detection algorithms across
-synthetic (LFR Overlapping) and real-world (DBLP Co-authorship) networks:
+Evaluates algorithms across 5 Diverse Real-World & Synthetic Benchmark Datasets:
+  1. LFR Overlapping Benchmark (1,000 nodes, 20% overlap)
+  2. DBLP Co-authorship Network (10,000 nodes, 75.5% overlap)
+  3. Amazon Co-purchasing Network (10,000 nodes, 97.1% overlap)
+  4. Facebook Social Circles Network (4,039 nodes, 18.5% overlap, Full Network)
+  5. YouTube User Interest Groups Network (10,000 nodes, 15.2% overlap)
 
 Algorithms evaluated:
   1. OHP-MOCD (Rust Native - BoundarySeeded, Unseeded, Optimal Defaults)
   2. OHP-MOCD (Rust Native - Crisp, Unseeded)
-  3. MCMOEA (Rust Native - Wen et al. 2016, Unseeded)
+  3. MCMOEA (Rust Native - Wen et al. 2016, Bounded Clique Depth)
   4. SLPA (Speaker-listener Label Propagation, Xie et al. 2011)
   5. CPM-Fixed (Clique Percolation Method, Palla et al. 2005)
-  6. HP-MOCD Baseline (Disjoint MOEA, Santos et al. 2024, Unseeded)
-
-Metrics computed:
-  - ONMI (Overlapping Normalized Mutual Information)
-  - Omega Index (Omega)
-  - Modularity (Q)
-  - Pairwise F1
-  - Overlapping Node Count (N_overlapping)
-  - Runtime (seconds)
+  6. HP-MOCD Baseline (Disjoint MOEA, Santos et al. 2024)
 
 Outputs:
   - CSV report: tests/benchmarks/all_algorithms_comparison.csv
@@ -34,21 +30,21 @@ import pandas as pd
 import networkx as nx
 import matplotlib.pyplot as plt
 
-# Add project paths
+# Add project root to sys.path
 REPO_ROOT = Path(__file__).resolve().parent.parent.parent
-CI_PROJECT_DIR = Path(r"D:\spring26\CI\CI_project")
-
-sys.path.insert(0, str(CI_PROJECT_DIR))
-sys.path.insert(1, str(REPO_ROOT))
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
 
 import pymocd
 from evaluation.metrics import evaluate_overlapping, evaluate_disjoint
 from data.load_lfr import load_lfr_overlapping, load_lfr_disjoint
 from data.load_dblp import load_dblp
+from data.load_amazon import load_amazon
+from data.load_facebook import load_facebook
+from data.load_youtube import load_youtube
 
-# Baseline Python implementations from course project
-from HPMOCD.slpa import run_slpa
-from HPMOCD.cpm_community_detection import run_cpm_ncn_fixed
+from algorithms.slpa import run_slpa
+from algorithms.cpm import run_cpm_ncn_fixed
 
 PLOTS_DIR = REPO_ROOT / "tests" / "benchmarks" / "plots"
 PLOTS_DIR.mkdir(parents=True, exist_ok=True)
@@ -100,22 +96,43 @@ def run_benchmark_comparison():
     print("=" * 80)
 
     # 1. Load Benchmark Datasets
-    print("\nLoading Datasets...")
+    print("\nLoading Benchmark Datasets...")
     datasets = []
     
+    # Dataset 1: LFR Overlapping
     try:
         G_lfr, gt_lfr = load_lfr_overlapping()
         datasets.append(("LFR Overlapping", G_lfr, gt_lfr, True))
     except Exception as e:
         print(f"LFR Overlapping load warning: {e}")
-        G_lfr, gt_lfr = load_lfr_disjoint()
-        datasets.append(("LFR Disjoint", G_lfr, gt_lfr, False))
 
+    # Dataset 2: DBLP Co-authorship
     try:
         G_dblp, gt_dblp = load_dblp()
         datasets.append(("DBLP Co-authorship", G_dblp, gt_dblp, True))
     except Exception as e:
         print(f"DBLP load warning: {e}")
+
+    # Dataset 3: Amazon Co-purchasing
+    try:
+        G_amz, gt_amz = load_amazon()
+        datasets.append(("Amazon Co-purchasing", G_amz, gt_amz, True))
+    except Exception as e:
+        print(f"Amazon load warning: {e}")
+
+    # Dataset 4: Facebook Social Circles
+    try:
+        G_fb, gt_fb = load_facebook()
+        datasets.append(("Facebook Social Circles", G_fb, gt_fb, True))
+    except Exception as e:
+        print(f"Facebook load warning: {e}")
+
+    # Dataset 5: YouTube User Interest Groups
+    try:
+        G_yt, gt_yt = load_youtube()
+        datasets.append(("YouTube User Groups", G_yt, gt_yt, True))
+    except Exception as e:
+        print(f"YouTube load warning: {e}")
 
     results = []
 
@@ -129,7 +146,7 @@ def run_benchmark_comparison():
         eval_fn = evaluate_overlapping if is_overlapping else evaluate_disjoint
 
         # 1. OHP-MOCD (Rust Native - BoundarySeeded, Optimal Unseeded Defaults)
-        print(" -> Running OHP-MOCD (Rust - BoundarySeeded, Unseeded)...")
+        print(" -> Running OHP-MOCD (Rust - BoundarySeeded)...")
         t0 = time.perf_counter()
         dict_part_b = pymocd.ohpmocd(
             G,
@@ -139,7 +156,7 @@ def run_benchmark_comparison():
             overlap_support_threshold=0.15,
             overlap_removal_threshold=0.08,
             switch_margin=0.05,
-            seed=None, # UNSEEDED!
+            seed=None,
         )
         t1 = time.perf_counter()
         rt_rust_b = t1 - t0
@@ -158,7 +175,7 @@ def run_benchmark_comparison():
         })
 
         # 2. OHP-MOCD (Rust Native - Crisp, Unseeded)
-        print(" -> Running OHP-MOCD (Rust - Crisp, Unseeded)...")
+        print(" -> Running OHP-MOCD (Rust - Crisp)...")
         t0 = time.perf_counter()
         dict_part_c = pymocd.ohpmocd(
             G,
@@ -167,7 +184,7 @@ def run_benchmark_comparison():
             overlap_support_threshold=0.15,
             overlap_removal_threshold=0.08,
             switch_margin=0.05,
-            seed=None, # UNSEEDED!
+            seed=None,
         )
         t1 = time.perf_counter()
         rt_rust_c = t1 - t0
@@ -185,8 +202,8 @@ def run_benchmark_comparison():
             **scores_rust_c,
         })
 
-        # 3. MCMOEA (Rust Native - Wen et al. 2016, Unseeded)
-        print(" -> Running MCMOEA (Rust Native, Unseeded)...")
+        # 3. MCMOEA (Rust Native - Wen et al. 2016, Bounded Clique Depth)
+        print(" -> Running MCMOEA (Rust Native)...")
         t0 = time.perf_counter()
         dict_mcmoea = pymocd.mcmoea(G, seed=None)
         t1 = time.perf_counter()
@@ -237,8 +254,8 @@ def run_benchmark_comparison():
             **scores_cpm,
         })
 
-        # 6. HP-MOCD Baseline (Disjoint MOEA, Unseeded)
-        print(" -> Running HP-MOCD Baseline (Disjoint, Unseeded)...")
+        # 6. HP-MOCD Baseline (Disjoint MOEA)
+        print(" -> Running HP-MOCD Baseline (Disjoint)...")
         t0 = time.perf_counter()
         dict_hp = pymocd.hpmocd(G)
         t1 = time.perf_counter()
@@ -285,7 +302,7 @@ def plot_benchmark_results(df: pd.DataFrame):
         df_ds = df[df["dataset"] == dataset_name].copy()
         ds_slug = dataset_name.lower().replace(" ", "_")
 
-        # 1. Overlapping Metrics Bar Plot (ONMI, Omega Index, Modularity Q, F1)
+        # 1. Overlapping Metrics Bar Plot
         fig, ax = plt.subplots(figsize=(10, 5))
         metrics = ["ONMI", "Omega", "Modularity", "F1"]
         x = np.arange(len(metrics))
@@ -339,6 +356,7 @@ def plot_benchmark_results(df: pd.DataFrame):
             )
         ax.set_ylabel("Number of Overlapping Nodes Detected")
         ax.set_title(f"Overlapping Node Recovery Count: {dataset_name}", fontweight="bold")
+        ax.set_xticks(np.arange(len(df_ds["algorithm"])))
         ax.set_xticklabels(df_ds["algorithm"], rotation=20, ha="right")
         ax.grid(True, linestyle="--", alpha=0.4, axis="y")
 
@@ -369,6 +387,7 @@ def plot_benchmark_results(df: pd.DataFrame):
             )
         ax.set_ylabel("Runtime (seconds, log-scale)")
         ax.set_title(f"Algorithm Execution Speed: {dataset_name}", fontweight="bold")
+        ax.set_xticks(np.arange(len(df_ds["algorithm"])))
         ax.set_xticklabels(df_ds["algorithm"], rotation=20, ha="right")
         ax.grid(True, linestyle="--", alpha=0.4, axis="y")
 
