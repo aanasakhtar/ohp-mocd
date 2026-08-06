@@ -25,11 +25,7 @@ pub fn find_maximal_cliques(graph: &Graph) -> Vec<Clique> {
 
     bron_kerbosch_pivot_fast(graph, &nbr_sets, &mut r, &mut p, &mut x, &mut cliques);
 
-    // Sort cliques by size (largest cliques first) and cap at 10,000 for memory safety
-    if cliques.len() > 10000 {
-        cliques.sort_by(|a, b| b.len().cmp(&a.len()));
-        cliques.truncate(10000);
-    }
+    // Full capacity: retain all Bron-Kerbosch maximal cliques
 
     let mut covered_nodes = FxHashSet::default();
     for clique in &cliques {
