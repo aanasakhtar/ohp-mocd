@@ -11,28 +11,11 @@ from evaluation.metrics import _cover_to_hard_partition
 
 
 def _clique_percolation(G: nx.Graph, k: int) -> list[frozenset]:
-    cliques = [c for c in nx.find_cliques(G) if len(c) >= k]
-    if not cliques:
+    try:
+        communities = list(nx.community.k_clique_communities(G, k))
+        return [frozenset(c) for c in communities if len(c) >= 2]
+    except Exception:
         return []
-
-    clique_graph = nx.Graph()
-    for i, c1 in enumerate(cliques):
-        clique_graph.add_node(i)
-        set_c1 = set(c1)
-        for j in range(i + 1, len(cliques)):
-            c2 = cliques[j]
-            if len(set_c1.intersection(c2)) >= k - 1:
-                clique_graph.add_edge(i, j)
-
-    communities = []
-    for component in nx.connected_components(clique_graph):
-        community_nodes = set()
-        for clique_idx in component:
-            community_nodes.update(cliques[clique_idx])
-        if community_nodes:
-            communities.append(frozenset(community_nodes))
-
-    return communities
 
 
 def _recover_unassigned_nodes(
