@@ -273,7 +273,7 @@ def run_benchmark_comparison():
         print(f"YouTube load warning: {e}")
 
     results = []
-    max_workers = min(len(datasets), os.cpu_count() or 4)
+    max_workers = min(len(datasets), 2)
     print(f"\n[Parallel Execution] Running benchmarks across {len(datasets)} datasets with {max_workers} worker processes...")
 
     t0_total = time.perf_counter()
