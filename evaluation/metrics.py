@@ -144,27 +144,26 @@ def modularity(G: nx.Graph, communities: list[frozenset]) -> float:
 
 
 def pairwise_f1(pred: list[frozenset], true: list[frozenset]) -> float:
-    nodes = list(set().union(*pred, *true))
-    node_idx = {v: i for i, v in enumerate(nodes)}
+    """
+    Pairwise F1 score (paper Section 5.1.1).
+    Computes exact true positive pairs via community intersections with O(1) memory footprint.
+    """
+    n_pred_pairs = sum(len(c) * (len(c) - 1) // 2 for c in pred)
+    n_true_pairs = sum(len(c) * (len(c) - 1) // 2 for c in true)
 
-    def pair_set(communities: list[frozenset]) -> set[tuple]:
-        pairs = set()
-        for c in communities:
-            lst = sorted(node_idx[v] for v in c if v in node_idx)
-            for i in range(len(lst)):
-                for j in range(i + 1, len(lst)):
-                    pairs.add((lst[i], lst[j]))
-        return pairs
+    if n_pred_pairs == 0 or n_true_pairs == 0:
+        return 0.0
 
-    pred_pairs = pair_set(pred)
-    true_pairs = pair_set(true)
+    tp = 0
+    for cp in pred:
+        for ct in true:
+            k = len(cp & ct)
+            if k >= 2:
+                tp += k * (k - 1) // 2
 
-    tp = len(pred_pairs & true_pairs)
-    fp = len(pred_pairs - true_pairs)
-    fn = len(true_pairs - pred_pairs)
+    precision = tp / n_pred_pairs
+    recall = tp / n_true_pairs
 
-    precision = tp / (tp + fp) if (tp + fp) > 0 else 0.0
-    recall    = tp / (tp + fn) if (tp + fn) > 0 else 0.0
     if precision + recall == 0:
         return 0.0
     return 2 * precision * recall / (precision + recall)
