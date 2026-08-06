@@ -24,18 +24,20 @@ Outputs:
 
 import sys
 import os
+from pathlib import Path
+
+# Add project root to sys.path and PYTHONPATH
+REPO_ROOT = Path(__file__).resolve().parent.parent.parent
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
+os.environ["PYTHONPATH"] = str(REPO_ROOT) + os.path.pathsep + os.environ.get("PYTHONPATH", "")
+
 import time
 import concurrent.futures
-from pathlib import Path
 import numpy as np
 import pandas as pd
 import networkx as nx
 import matplotlib.pyplot as plt
-
-# Add project root to sys.path
-REPO_ROOT = Path(__file__).resolve().parent.parent.parent
-if str(REPO_ROOT) not in sys.path:
-    sys.path.insert(0, str(REPO_ROOT))
 
 import pymocd
 from evaluation.metrics import evaluate_overlapping, evaluate_disjoint
