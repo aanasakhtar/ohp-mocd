@@ -25,10 +25,10 @@ pub fn find_maximal_cliques(graph: &Graph) -> Vec<Clique> {
 
     bron_kerbosch_pivot_fast(graph, &nbr_sets, &mut r, &mut p, &mut x, &mut cliques);
 
-    // Cap maximal cliques at 5,000 largest cliques to keep MCMOEA precomputed matrix under 100MB RAM
-    if cliques.len() > 5000 {
+    // Cap maximal cliques at 1,000 largest cliques to keep MCMOEA precomputed matrix under 4MB RAM
+    if cliques.len() > 1000 {
         cliques.sort_by(|a, b| b.len().cmp(&a.len()));
-        cliques.truncate(5000);
+        cliques.truncate(1000);
     }
 
     let mut covered_nodes = FxHashSet::default();

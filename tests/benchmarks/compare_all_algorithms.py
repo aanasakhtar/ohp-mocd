@@ -273,18 +273,15 @@ def run_benchmark_comparison():
         print(f"YouTube load warning: {e}")
 
     results = []
-    max_workers = min(len(datasets), 2)
-    print(f"\n[Parallel Execution] Running benchmarks across {len(datasets)} datasets with {max_workers} worker processes...")
+    print(f"\n[Sequential Execution] Running benchmarks across {len(datasets)} datasets...")
 
     t0_total = time.perf_counter()
-    with concurrent.futures.ProcessPoolExecutor(max_workers=max_workers) as executor:
-        futures = [executor.submit(run_single_dataset_benchmark, ds) for ds in datasets]
-        for future in concurrent.futures.as_completed(futures):
-            try:
-                ds_res = future.result()
-                results.extend(ds_res)
-            except Exception as exc:
-                print(f"Worker generated an exception: {exc}")
+    for ds in datasets:
+        try:
+            ds_res = run_single_dataset_benchmark(ds)
+            results.extend(ds_res)
+        except Exception as exc:
+            print(f"Dataset benchmark exception for {ds[0]}: {exc}")
 
     t1_total = time.perf_counter()
     print(f"\n[Total Suite Elapsed Time]: {t1_total - t0_total:.2f} seconds")
