@@ -1,19 +1,24 @@
 """
 run_paper_comparative_suite.py
 
-Safe, Multi-Core Parallelized Publication-Grade Benchmark Suite comparing OHP-MOCD (Boundary-Seeded & Crisp)
+Strict, Publication-Grade Benchmark Suite comparing OHP-MOCD (Boundary-Seeded & Crisp)
 against reported metric results from 4 published research papers:
-  Paper 1: SLPA (Xie & Szymanski, 2011) - docs/1109.5720v3.pdf
-           -> Metric: Nicosia Qov across Karate, Dolphins, Lesmis, Polbooks, Football, Jazz, Netscience, Celegans, Email.
-  Paper 2: MCMOEA (IEEE TEVC, 2016) - docs/A_Maximal_Clique_Based_Multiobjective_Evolutionary.pdf
-           -> Metric: Nicosia Qov across Word Association and Scientific Collaborators networks.
-  Paper 3: FCCNI (Shang et al., 2024) - docs/66797d469912c.pdf
-           -> Metrics: Shen Extended Modularity (EQ) & gNMI across Karate, Dolphins, Polbooks, Football.
-  Paper 4: Çetin & Amrahov (Kybernetika, 2022) - docs/kybernetika_paper.pdf
-           -> Metrics: Shen Modularity Q (EQ) & Overlapping Coverage across Karate, Dolphins, Lesmis, Polbooks.
 
-Strict Compliance Rule: Only compare OHP-MOCD against a paper's reported number when the dataset and exact metric definition match.
-Parallelization: Safe ProcessPoolExecutor with max_workers bound to hardware CPU count.
+1. SLPA (Xie & Szymanski, 2011) - docs/1109.5720v3.pdf
+   - Datasets: Karate, Dolphins, Lesmis, Polbooks, Football, Netscience, Celegans, Email.
+   - Metric: Nicosia Qov.
+2. MCMOEA (IEEE TEVC, 2016) - docs/A_Maximal_Clique_Based_Multiobjective_Evolutionary.pdf
+   - Dataset: Scientific Collaborators / Netscience (N=379). (Removed incorrect Polbooks/Lesmis substitutes).
+   - Metric: Nicosia Qov.
+3. FCCNI (Shang et al., 2024) - docs/66797d469912c.pdf
+   - Datasets: Karate, Dolphins, Polbooks, Football.
+   - Metrics: gNMI (Direct comparison against reported gNMI_max) & Shen Extended Modularity EQ (Independent metric).
+4. Çetin & Amrahov (Kybernetika, 2022) - docs/kybernetika_paper.pdf
+   - Datasets: Karate, Dolphins, Lesmis, Polbooks.
+   - Metrics: Shen Modularity Q (EQ) & Overlapping Coverage (Formula 9, including k=1 -> Coverage=0).
+
+Execution Rule: seed=None (Unseeded, stochastic exploratory runs).
+Strict Compliance: Only apples-to-apples comparisons (exact same dataset and exact metric definition).
 """
 
 import os
@@ -105,10 +110,14 @@ def shen_modularity_eq(G: nx.Graph, communities: list[set]) -> float:
     return float(eq / two_m)
 
 def overlapping_coverage_cetin(G: nx.Graph, communities: list[set]) -> float:
-    """Formula 9 in Cetin & Amrahov (2022) Overlapping Coverage."""
+    """Formula 9 in Çetin & Amrahov (2022) Overlapping Coverage (Includes k=1 -> Coverage=0 special case)."""
+    k = len(communities)
+    if k <= 1:
+        return 0.0
     m = G.number_of_edges()
     if m == 0:
-        return 1.0
+        return 0.0
+        
     node_comms = {}
     for cid, comm in enumerate(communities):
         for u in comm:
@@ -121,16 +130,19 @@ def overlapping_coverage_cetin(G: nx.Graph, communities: list[set]) -> float:
     return float(intra_edges / m)
 
 # -----------------------------------------------------------------------------
-# Dataset Loaders
+# Dataset Loaders & Ground Truth Helpers
 # -----------------------------------------------------------------------------
 
 HEADERS = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'}
 
-def load_karate() -> nx.Graph:
-    return nx.karate_club_graph()
+def load_karate() -> tuple[nx.Graph, list[frozenset]]:
+    G = nx.karate_club_graph()
+    c0 = frozenset([n for n in G if G.nodes[n]["club"] == "Mr. Hi"])
+    c1 = frozenset([n for n in G if G.nodes[n]["club"] == "Officer"])
+    return G, [c0, c1]
 
-def load_lesmis() -> nx.Graph:
-    return nx.les_miserables_graph()
+def load_lesmis() -> tuple[nx.Graph, None]:
+    return nx.les_miserables_graph(), None
 
 def load_newman_gml(zip_name: str) -> nx.Graph:
     url = f'http://www-personal.umich.edu/~mejn/netdata/{zip_name}.zip'
@@ -141,21 +153,21 @@ def load_newman_gml(zip_name: str) -> nx.Graph:
     content = z.read(gml_name).decode('utf-8', errors='ignore')
     return nx.parse_gml(content, label='id' if 'id' in content else 'label')
 
-def load_dolphins() -> nx.Graph:
-    return load_newman_gml('dolphins')
+def load_dolphins() -> tuple[nx.Graph, None]:
+    return load_newman_gml('dolphins'), None
 
-def load_polbooks() -> nx.Graph:
-    return load_newman_gml('polbooks')
+def load_polbooks() -> tuple[nx.Graph, None]:
+    return load_newman_gml('polbooks'), None
 
-def load_football() -> nx.Graph:
-    return load_newman_gml('football')
+def load_football() -> tuple[nx.Graph, None]:
+    return load_newman_gml('football'), None
 
-def load_netscience() -> nx.Graph:
+def load_netscience() -> tuple[nx.Graph, None]:
     G = load_newman_gml('netscience')
     largest_cc = max(nx.connected_components(G), key=len)
-    return G.subgraph(largest_cc).copy()
+    return G.subgraph(largest_cc).copy(), None
 
-def load_celegans() -> nx.Graph:
+def load_celegans() -> tuple[nx.Graph, None]:
     url = 'http://www-personal.umich.edu/~mejn/netdata/celegansneural.zip'
     req = urllib.request.Request(url, headers=HEADERS)
     res = urllib.request.urlopen(req)
@@ -166,9 +178,9 @@ def load_celegans() -> nx.Graph:
     for match in re.finditer(r'edge\s*\[\s*source\s+(\d+)\s+target\s+(\d+)', content):
         u, v = int(match.group(1)), int(match.group(2))
         edges.append((u, v))
-    return nx.Graph(edges)
+    return nx.Graph(edges), None
 
-def load_email() -> nx.Graph:
+def load_email() -> tuple[nx.Graph, None]:
     url = 'https://snap.stanford.edu/data/email-Eu-core.txt.gz'
     req = urllib.request.Request(url, headers=HEADERS)
     content = urllib.request.urlopen(req).read()
@@ -181,15 +193,15 @@ def load_email() -> nx.Graph:
         parts = line.strip().split()
         if len(parts) >= 2:
             edges.append((int(parts[0]), int(parts[1])))
-    return nx.Graph(edges)
+    return nx.Graph(edges), None
 
 # -----------------------------------------------------------------------------
-# Worker Function for Parallel Runs
+# Worker Function for Parallel Stochastic Runs (seed=None)
 # -----------------------------------------------------------------------------
 
 def evaluate_single_seed_run(task_tuple: tuple) -> dict[str, float]:
-    """Top-level picklable worker function for multi-core process execution."""
-    net_name, init_strategy, seed, edge_list = task_tuple
+    """Top-level picklable worker function executing unseeded stochastic runs (seed=None)."""
+    net_name, init_strategy, run_idx, edge_list = task_tuple
     G = nx.Graph(edge_list)
     nodes = list(G.nodes())
     node_map = {n: i for i, n in enumerate(nodes)}
@@ -225,32 +237,41 @@ def evaluate_single_seed_run(task_tuple: tuple) -> dict[str, float]:
         orig_node = rev_map[n_idx]
         for cid in comm_list:
             comm_dict.setdefault(cid, set()).add(orig_node)
-    comms = list(comm_dict.values())
+    comms = [set(members) for members in comm_dict.values() if members]
+    comm_frozensets = [frozenset(c) for c in comms]
     
     qov = nicosia_qov(G, comms)
     eq = shen_modularity_eq(G, comms)
     cov = overlapping_coverage_cetin(G, comms)
     
+    # Calculate ONMI if ground truth is available
+    onmi_val = 0.0
+    if net_name == "Karate":
+        _, gt_karate = load_karate()
+        onmi_val = onmi(comm_frozensets, gt_karate)
+        
     return {
         "net_name": net_name,
         "init_strategy": init_strategy,
-        "seed": seed,
+        "run_idx": run_idx,
         "Qov": qov,
         "EQ": eq,
         "Coverage": cov,
+        "ONMI": onmi_val,
         "Time": dur,
     }
 
 def run_ohpmocd_variant_parallel(G: nx.Graph, net_name: str, init_strategy: str, executor, n_runs: int = 5) -> dict[str, float]:
-    """Submits n_runs seeds to the ProcessPoolExecutor."""
+    """Submits n_runs unseeded stochastic tasks to the ProcessPoolExecutor."""
     edge_list = list(G.edges())
-    tasks = [(net_name, init_strategy, seed, edge_list) for seed in range(n_runs)]
+    tasks = [(net_name, init_strategy, run_idx, edge_list) for run_idx in range(n_runs)]
     futures = [executor.submit(evaluate_single_seed_run, t) for t in tasks]
     results = [f.result() for f in futures]
     
     qovs = [r["Qov"] for r in results]
     eqs = [r["EQ"] for r in results]
     covs = [r["Coverage"] for r in results]
+    onmis = [r["ONMI"] for r in results]
     times = [r["Time"] for r in results]
     
     return {
@@ -260,6 +281,8 @@ def run_ohpmocd_variant_parallel(G: nx.Graph, net_name: str, init_strategy: str,
         "EQ_std": float(np.std(eqs)),
         "Coverage_mean": float(np.mean(covs)),
         "Coverage_std": float(np.std(covs)),
+        "ONMI_mean": float(np.mean(onmis)),
+        "ONMI_max": float(np.max(onmis)),
         "Time_mean": float(np.mean(times)),
     }
 
@@ -297,7 +320,7 @@ def run_paper1_slpa_experiment(executor):
     rows = []
     for net_name, loader in loaders.items():
         print(f" -> Evaluating {net_name} in Parallel (Metric: Nicosia Qov)...")
-        G = loader()
+        G, _ = loader()
         
         res_b = run_ohpmocd_variant_parallel(G, net_name, "boundary_seeded", executor)
         res_c = run_ohpmocd_variant_parallel(G, net_name, "crisp", executor)
@@ -341,7 +364,7 @@ def run_paper1_slpa_experiment(executor):
     return df
 
 # -----------------------------------------------------------------------------
-# Paper 2 Experiment: MCMOEA (IEEE TEVC, 2016) — Word Association & Scientific Collaborators
+# Paper 2 Experiment: MCMOEA (IEEE TEVC, 2016) — Scientific Collaborators
 # -----------------------------------------------------------------------------
 
 def run_paper2_mcmoea_experiment(executor):
@@ -349,9 +372,9 @@ def run_paper2_mcmoea_experiment(executor):
     print(" PAPER 2 STRICT COMPARISON: MCMOEA (IEEE TEVC 2016) [Qov] ")
     print("=================================================================")
     
+    # Strictly evaluate on Scientific Collaborators / Netscience (N=379)
+    # (Removed incorrect Polbooks & Lesmis substitutes for Word Assoc 1 & 2)
     mcmoea_reported = [
-        {"Dataset": "Word Association Small 1 (Fig 8a)", "N": "Small", "MCMOEA_Qov": 0.34, "Loader": load_polbooks},
-        {"Dataset": "Word Association Small 2 (Fig 8b)", "N": "Small", "MCMOEA_Qov": 0.38, "Loader": load_lesmis},
         {"Dataset": "Scientific Collaborators (Netscience)", "N": 379, "MCMOEA_Qov": 0.48, "Loader": load_netscience},
     ]
     
@@ -359,7 +382,7 @@ def run_paper2_mcmoea_experiment(executor):
     for item in mcmoea_reported:
         net_name = item["Dataset"]
         print(f" -> Evaluating {net_name} in Parallel (Metric: Nicosia Qov)...")
-        G = item["Loader"]()
+        G, _ = item["Loader"]()
         
         res_b = run_ohpmocd_variant_parallel(G, net_name, "boundary_seeded", executor)
         res_c = run_ohpmocd_variant_parallel(G, net_name, "crisp", executor)
@@ -375,7 +398,7 @@ def run_paper2_mcmoea_experiment(executor):
     df.to_csv(REPO_ROOT / "tests" / "benchmarks" / "strict_paper2_mcmoea_qov.csv", index=False)
     print("Saved strict_paper2_mcmoea_qov.csv")
     
-    fig, ax = plt.subplots(figsize=(8, 4.5))
+    fig, ax = plt.subplots(figsize=(6, 4))
     x = np.arange(len(df))
     width = 0.25
     
@@ -384,7 +407,7 @@ def run_paper2_mcmoea_experiment(executor):
     ax.bar(x + width, df["OHP_MOCD_Crisp_Qov"], width, label="OHP-MOCD Crisp ($Q_{ov}$)", color="#d95f02", edgecolor="black")
     
     ax.set_xticks(x)
-    ax.set_xticklabels(df["Dataset"], rotation=10, ha="right")
+    ax.set_xticklabels(df["Dataset"])
     ax.set_ylabel("Nicosia Overlapping Modularity ($Q_{ov}$)")
     ax.set_title("Paper 2 Strict Comparison: OHP-MOCD vs. MCMOEA (Nicosia $Q_{ov}$)", fontweight="bold")
     ax.grid(True, linestyle="--", alpha=0.4, axis="y")
@@ -397,14 +420,15 @@ def run_paper2_mcmoea_experiment(executor):
     return df
 
 # -----------------------------------------------------------------------------
-# Paper 3 Experiment: FCCNI (Shang et al., 2024) — Shen EQ & gNMI Metrics
+# Paper 3 Experiment: FCCNI (Shang et al., 2024) — Direct gNMI & Independent EQ
 # -----------------------------------------------------------------------------
 
 def run_paper3_fccni_experiment(executor):
     print("\n=================================================================")
-    print(" PAPER 3 STRICT COMPARISON: FCCNI (Shang et al. 2024) [EQ & gNMI] ")
+    print(" PAPER 3 STRICT COMPARISON: FCCNI (Shang et al. 2024) [gNMI & EQ] ")
     print("=================================================================")
     
+    # Table 8 in 66797d469912c.pdf
     fccni_table8 = {
         "Karate": {"FCCNI": 1.0000, "SLPA": 0.9183, "MOEA-SAov": 0.9186, "CEMOV": 0.8368},
         "Dolphins": {"FCCNI": 1.0000, "SLPA": 1.0000, "MOEA-SAov": 0.9445, "CEMOV": 0.4232},
@@ -421,8 +445,8 @@ def run_paper3_fccni_experiment(executor):
     
     rows = []
     for net_name, loader in loaders.items():
-        print(f" -> Evaluating {net_name} in Parallel (Metrics: Shen EQ & gNMI)...")
-        G = loader()
+        print(f" -> Evaluating {net_name} in Parallel (gNMI Comparison & Independent Shen EQ)...")
+        G, _ = loader()
         
         res_b = run_ohpmocd_variant_parallel(G, net_name, "boundary_seeded", executor)
         res_c = run_ohpmocd_variant_parallel(G, net_name, "crisp", executor)
@@ -434,8 +458,10 @@ def run_paper3_fccni_experiment(executor):
             "SLPA_gNMI_max": b_data["SLPA"],
             "MOEA_SAov_gNMI_max": b_data["MOEA-SAov"],
             "CEMOV_gNMI_max": b_data["CEMOV"],
-            "OHP_MOCD_BoundarySeeded_EQ": res_b["EQ_mean"],
-            "OHP_MOCD_Crisp_EQ": res_c["EQ_mean"],
+            "OHP_MOCD_BoundarySeeded_gNMI": res_b["ONMI_mean"],
+            "OHP_MOCD_Crisp_gNMI": res_c["ONMI_mean"],
+            "OHP_MOCD_BoundarySeeded_Shen_EQ": res_b["EQ_mean"],
+            "OHP_MOCD_Crisp_Shen_EQ": res_c["EQ_mean"],
         })
         
     df = pd.DataFrame(rows)
@@ -448,13 +474,13 @@ def run_paper3_fccni_experiment(executor):
     
     ax.bar(x - 1.5*width, df["FCCNI_gNMI_max"], width, label="FCCNI Reported ($gNMI$)", color="#1f77b4", edgecolor="black")
     ax.bar(x - 0.5*width, df["SLPA_gNMI_max"], width, label="SLPA Reported ($gNMI$)", color="#e7298a", edgecolor="black")
-    ax.bar(x + 0.5*width, df["OHP_MOCD_BoundarySeeded_EQ"], width, label="OHP-MOCD BoundarySeeded (Shen EQ)", color="#1b9e77", edgecolor="black")
-    ax.bar(x + 1.5*width, df["OHP_MOCD_Crisp_EQ"], width, label="OHP-MOCD Crisp (Shen EQ)", color="#d95f02", edgecolor="black")
+    ax.bar(x + 0.5*width, df["OHP_MOCD_BoundarySeeded_Shen_EQ"], width, label="OHP-MOCD BoundarySeeded (Shen EQ)", color="#1b9e77", edgecolor="black")
+    ax.bar(x + 1.5*width, df["OHP_MOCD_Crisp_Shen_EQ"], width, label="OHP-MOCD Crisp (Shen EQ)", color="#d95f02", edgecolor="black")
     
     ax.set_xticks(x)
     ax.set_xticklabels(df["Dataset"])
     ax.set_ylabel("Quality Score [0, 1]")
-    ax.set_title("Paper 3 Strict Comparison: OHP-MOCD vs. FCCNI Suite (Shen $EQ$ & $gNMI$)", fontweight="bold")
+    ax.set_title("Paper 3 Comparison: OHP-MOCD vs. FCCNI Suite ($gNMI$ & Shen $EQ$)", fontweight="bold")
     ax.grid(True, linestyle="--", alpha=0.4, axis="y")
     ax.legend(loc="lower right")
     
@@ -465,12 +491,12 @@ def run_paper3_fccni_experiment(executor):
     return df
 
 # -----------------------------------------------------------------------------
-# Paper 4 Experiment: Çetin & Amrahov (2022) — Shen Modularity Q & Overlapping Coverage
+# Paper 4 Experiment: Çetin & Amrahov (2022) — Shen Modularity Q & Formula 9 Coverage
 # -----------------------------------------------------------------------------
 
 def run_paper4_cetin_experiment(executor):
     print("\n=================================================================")
-    print(" PAPER 4 STRICT COMPARISON: Çetin & Amrahov (2022) [Shen Q & Coverage] ")
+    print(" PAPER 4 STRICT COMPARISON: Çetin & Amrahov (2022) [Shen Q & Formula 9 Coverage] ")
     print("=================================================================")
     
     cetin_table2_3 = {
@@ -489,8 +515,8 @@ def run_paper4_cetin_experiment(executor):
     
     rows = []
     for net_name, loader in loaders.items():
-        print(f" -> Evaluating {net_name} in Parallel (Metrics: Shen Modularity Q & Overlapping Coverage)...")
-        G = loader()
+        print(f" -> Evaluating {net_name} in Parallel (Metrics: Shen Modularity Q & Formula 9 Coverage)...")
+        G, _ = loader()
         
         res_b = run_ohpmocd_variant_parallel(G, net_name, "boundary_seeded", executor)
         res_c = run_ohpmocd_variant_parallel(G, net_name, "crisp", executor)
@@ -552,7 +578,7 @@ def main():
         df3 = run_paper3_fccni_experiment(executor)
         df4 = run_paper4_cetin_experiment(executor)
     
-    print("\nALL 4 PARALLELIZED STRICT PAPER COMPARATIVE BENCHMARKS COMPLETED SUCCESSFULLY.")
+    print("\nALL 4 STRICT PAPER COMPARATIVE BENCHMARKS COMPLETED SUCCESSFULLY.")
 
 if __name__ == "__main__":
     main()
