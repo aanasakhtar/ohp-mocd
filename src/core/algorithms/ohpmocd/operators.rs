@@ -81,7 +81,6 @@ pub fn generate_population_ohp_seeded(
     graph: &Graph,
     population_size: usize,
     strategy: &InitializationStrategy,
-    max_memberships_per_node: usize,
     rng: &mut StdRng,
 ) -> Vec<OhpPartition> {
     let mut node_ids: Vec<NodeId> = graph.nodes.iter().copied().collect();
@@ -101,7 +100,7 @@ pub fn generate_population_ohp_seeded(
             match strategy {
                 InitializationStrategy::Crisp => {}
                 InitializationStrategy::RandomOverlap { overlap_probability } => {
-                    if max_memberships_per_node > 1 && *overlap_probability > 0.0 {
+                    if *overlap_probability > 0.0 {
                         let mut nodes: Vec<NodeId> = partition.keys().copied().collect();
                         nodes.sort_unstable();
                         for &node in &nodes {
@@ -126,7 +125,7 @@ pub fn generate_population_ohp_seeded(
                                 }
                                 if let Some(&sec) = candidate_comms.choose(rng) {
                                     if let Some(m) = partition.get_mut(&node) {
-                                        if m.len() < max_memberships_per_node && !m.contains(sec) {
+                                        if !m.contains(sec) {
                                             m.communities.push(sec);
                                         }
                                     }
@@ -136,7 +135,7 @@ pub fn generate_population_ohp_seeded(
                     }
                 }
                 InitializationStrategy::BoundarySeeded { overlap_probability } => {
-                    if max_memberships_per_node > 1 && *overlap_probability > 0.0 {
+                    if *overlap_probability > 0.0 {
                         let mut nodes: Vec<NodeId> = partition.keys().copied().collect();
                         nodes.sort_unstable();
                         for &node in &nodes {
@@ -163,7 +162,7 @@ pub fn generate_population_ohp_seeded(
                                 for (cand_c, _) in sorted_nbr_comms {
                                     if cand_c != primary {
                                         if let Some(m) = partition.get_mut(&node) {
-                                            if m.len() < max_memberships_per_node && !m.contains(cand_c) {
+                                            if !m.contains(cand_c) {
                                                 m.communities.push(cand_c);
                                                 break;
                                             }
@@ -181,11 +180,10 @@ pub fn generate_population_ohp_seeded(
         .collect()
 }
 
-/// Phase 5: Overlap-aware ensemble crossover over 4 parents for Top-K memberships.
+/// Phase 5: Overlap-aware ensemble crossover over 4 parents with dynamic neighborhood support.
 pub fn ensemble_crossover_ohp_with_rng<R: Rng + ?Sized>(
     parents: &[&OhpPartition],
     graph: &Graph,
-    max_memberships_per_node: usize,
     overlap_support_threshold: f64,
     rng: &mut R,
 ) -> OhpPartition {
@@ -239,22 +237,17 @@ pub fn ensemble_crossover_ohp_with_rng<R: Rng + ?Sized>(
         runner_ups.insert(node, runner_up_candidates);
     }
 
-    // Step 2: If max_memberships_per_node > 1, evaluate support for runner-ups up to K
-    if max_memberships_per_node > 1 {
-        for &node in &keys {
-            if let Some(cands) = runner_ups.get(&node) {
-                let support_counts = neighborhood_support_counts(node, &child, graph);
-                let degree = graph.adjacency_list.get(&node).map_or(0, Vec::len);
-                for &cand in cands {
-                    let supp = support_ratio_from_counts(&support_counts, degree, cand);
-                    if supp >= overlap_support_threshold {
-                        if let Some(m) = child.get_mut(&node) {
-                            if m.communities.len() >= max_memberships_per_node {
-                                break;
-                            }
-                            if !m.communities.contains(&cand) {
-                                m.communities.push(cand);
-                            }
+    // Step 2: Evaluate neighborhood support for runner-ups dynamically
+    for &node in &keys {
+        if let Some(cands) = runner_ups.get(&node) {
+            let support_counts = neighborhood_support_counts(node, &child, graph);
+            let degree = graph.adjacency_list.get(&node).map_or(0, Vec::len);
+            for &cand in cands {
+                let supp = support_ratio_from_counts(&support_counts, degree, cand);
+                if supp >= overlap_support_threshold {
+                    if let Some(m) = child.get_mut(&node) {
+                        if !m.communities.contains(&cand) {
+                            m.communities.push(cand);
                         }
                     }
                 }
@@ -265,12 +258,11 @@ pub fn ensemble_crossover_ohp_with_rng<R: Rng + ?Sized>(
     child
 }
 
-/// Phase 6: Topology-guided mutation for Top-K memberships (Add / Remove / Switch rules).
+/// Phase 6: Topology-guided mutation for dynamic memberships (Add / Remove / Switch rules).
 pub fn mutate_ohp_with_rng<R: Rng + ?Sized>(
     partition: &mut OhpPartition,
     graph: &Graph,
     mutation_rate: f64,
-    max_memberships_per_node: usize,
     overlap_support_threshold: f64,
     overlap_removal_threshold: f64,
     switch_margin: f64,
@@ -327,47 +319,36 @@ pub fn mutate_ohp_with_rng<R: Rng + ?Sized>(
             updated_communities.insert(0, best_switch_comm);
         }
 
-        // Rules 1 & 2: Add or remove additional memberships (if max_memberships_per_node > 1)
-        if max_memberships_per_node > 1 {
-            // Rule 2: Remove unsupported additional memberships (indices 1..)
-            let mut kept = vec![updated_communities[0]];
-            for &c in &updated_communities[1..] {
-                if kept.len() >= max_memberships_per_node {
-                    break;
-                }
-                let supp = support_ratio_from_counts(&support_counts, neighbors.len(), c);
-                if supp >= overlap_removal_threshold {
-                    if !kept.contains(&c) {
-                        kept.push(c);
-                    }
+        // Rule 2: Remove unsupported additional memberships (indices 1..)
+        let mut kept = vec![updated_communities[0]];
+        for &c in &updated_communities[1..] {
+            let supp = support_ratio_from_counts(&support_counts, neighbors.len(), c);
+            if supp >= overlap_removal_threshold {
+                if !kept.contains(&c) {
+                    kept.push(c);
                 }
             }
-            updated_communities = kept;
+        }
+        updated_communities = kept;
 
-            // Rule 1: Add supported additional memberships up to max_memberships_per_node
-            let mut candidates: Vec<(CommunityId, f64)> = neighbor_comms
-                .iter()
-                .filter(|&&c| !updated_communities.contains(&c))
-                .map(|&c| (c, support_ratio_from_counts(&support_counts, neighbors.len(), c)))
-                .filter(|&(_, supp)| supp >= overlap_support_threshold)
-                .collect();
+        // Rule 1: Add supported additional memberships dynamically based on support threshold
+        let mut candidates: Vec<(CommunityId, f64)> = neighbor_comms
+            .iter()
+            .filter(|&&c| !updated_communities.contains(&c))
+            .map(|&c| (c, support_ratio_from_counts(&support_counts, neighbors.len(), c)))
+            .filter(|&(_, supp)| supp >= overlap_support_threshold)
+            .collect();
 
-            candidates.sort_unstable_by(|a, b| {
-                b.1.partial_cmp(&a.1)
-                    .unwrap_or(std::cmp::Ordering::Equal)
-                    .then_with(|| a.0.cmp(&b.0))
-            });
+        candidates.sort_unstable_by(|a, b| {
+            b.1.partial_cmp(&a.1)
+                .unwrap_or(std::cmp::Ordering::Equal)
+                .then_with(|| a.0.cmp(&b.0))
+        });
 
-            for (c, _) in candidates {
-                if updated_communities.len() >= max_memberships_per_node {
-                    break;
-                }
-                if !updated_communities.contains(&c) {
-                    updated_communities.push(c);
-                }
+        for (c, _) in candidates {
+            if !updated_communities.contains(&c) {
+                updated_communities.push(c);
             }
-        } else {
-            updated_communities.truncate(1);
         }
 
         partition.insert(node, OhpMembership::from_vec(updated_communities));
@@ -403,7 +384,6 @@ pub fn create_offspring_ohp_seeded(
     crossover_rate: f64,
     mutation_rate: f64,
     tournament_size: usize,
-    max_memberships_per_node: usize,
     overlap_support_threshold: f64,
     overlap_removal_threshold: f64,
     switch_margin: f64,
@@ -436,7 +416,6 @@ pub fn create_offspring_ohp_seeded(
                 ensemble_crossover_ohp_with_rng(
                     &parent_partitions,
                     graph,
-                    max_memberships_per_node,
                     overlap_support_threshold,
                     &mut local_rng,
                 )
@@ -448,7 +427,6 @@ pub fn create_offspring_ohp_seeded(
                 &mut child,
                 graph,
                 mutation_rate,
-                max_memberships_per_node,
                 overlap_support_threshold,
                 overlap_removal_threshold,
                 switch_margin,
@@ -471,7 +449,6 @@ pub fn generate_population_seeded(
         graph,
         population_size,
         &InitializationStrategy::Crisp,
-        1,
         rng,
     )
     .into_iter()
@@ -491,7 +468,6 @@ pub fn mutate_with_rng(
         &mut ohp,
         graph,
         mutation_rate,
-        1,
         DEFAULT_OVERLAP_SUPPORT_THRESHOLD,
         DEFAULT_OVERLAP_REMOVAL_THRESHOLD,
         DEFAULT_SWITCH_MARGIN,
@@ -516,7 +492,6 @@ pub fn create_offspring_seeded(
         crossover_rate,
         mutation_rate,
         tournament_size,
-        1,
         DEFAULT_OVERLAP_SUPPORT_THRESHOLD,
         DEFAULT_OVERLAP_REMOVAL_THRESHOLD,
         DEFAULT_SWITCH_MARGIN,

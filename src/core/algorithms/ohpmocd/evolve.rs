@@ -112,7 +112,7 @@ fn evolve_crisp_seeded<E>(
     let mut rng = StdRng::seed_from_u64(seed);
 
     let mut individuals: Vec<Individual> =
-        generate_population_ohp_seeded(graph, pop_size, &InitializationStrategy::Crisp, 1, &mut rng)
+        generate_population_ohp_seeded(graph, pop_size, &InitializationStrategy::Crisp, &mut rng)
             .into_iter()
             .map(|ohp| Individual::new(ohp_to_crisp(&ohp)))
             .collect();
@@ -146,7 +146,6 @@ pub fn evolve_ohp<E>(
     num_gens: usize,
     cross_rate: f64,
     mut_rate: f64,
-    max_memberships_per_node: usize,
     init_strategy: &InitializationStrategy,
     overlap_support_threshold: f64,
     overlap_removal_threshold: f64,
@@ -161,7 +160,7 @@ pub fn evolve_ohp<E>(
     };
 
     let mut individuals: Vec<OhpIndividual> =
-        generate_population_ohp_seeded(graph, pop_size, init_strategy, max_memberships_per_node, &mut rng)
+        generate_population_ohp_seeded(graph, pop_size, init_strategy, &mut rng)
             .into_iter()
             .map(OhpIndividual::new)
             .collect();
@@ -177,7 +176,6 @@ pub fn evolve_ohp<E>(
             cross_rate,
             mut_rate,
             TOURNAMENT_SIZE,
-            max_memberships_per_node,
             overlap_support_threshold,
             overlap_removal_threshold,
             switch_margin,

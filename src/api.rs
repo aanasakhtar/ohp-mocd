@@ -18,7 +18,7 @@ use crate::core::algorithms::ohpmocd::OhpMocd;
 use crate::core::algorithms::ohpmocd::{
     DEFAULT_CROSS_RATE as OHPMOCD_DEFAULT_CROSS_RATE,
     DEFAULT_DEBUG_LEVEL as OHPMOCD_DEFAULT_DEBUG_LEVEL,
-    DEFAULT_MAX_MEMBERSHIPS_PER_NODE, DEFAULT_MUT_RATE as OHPMOCD_DEFAULT_MUT_RATE,
+    DEFAULT_MUT_RATE as OHPMOCD_DEFAULT_MUT_RATE,
     DEFAULT_NUM_GENS as OHPMOCD_DEFAULT_NUM_GENS, DEFAULT_POP_SIZE as OHPMOCD_DEFAULT_POP_SIZE,
 };
 use crate::core::algorithms::krm;
@@ -53,15 +53,13 @@ pub fn hpmocd_fn(py: Python<'_>, graph: &Bound<'_, PyAny>) -> PyResult<Partition
     instance.run(py)
 }
 
-/// Run OHP-MOCD (overlapping NSGA-II extension) with defaults.
-/// With default ``max_memberships_per_node=1``, behaves like HP-MOCD (returns dict[node, community]).
-/// With ``max_memberships_per_node > 1``, returns dict[node, list[community]].
+/// Run OHP-MOCD (overlapping NSGA-II extension) with dynamic self-adapting node memberships.
+/// Returns ``dict[node, list[community]]``.
 #[gen_stub_pyfunction]
 #[pyfunction]
 #[pyo3(name = "ohpmocd", signature = (
     graph,
     *,
-    max_memberships_per_node = DEFAULT_MAX_MEMBERSHIPS_PER_NODE,
     init_strategy = "boundary_seeded",
     init_overlap_prob = 0.4,
     overlap_support_threshold = 0.15,
@@ -72,7 +70,6 @@ pub fn hpmocd_fn(py: Python<'_>, graph: &Bound<'_, PyAny>) -> PyResult<Partition
 pub fn ohpmocd_fn(
     py: Python<'_>,
     graph: &Bound<'_, PyAny>,
-    max_memberships_per_node: usize,
     init_strategy: &str,
     init_overlap_prob: f64,
     overlap_support_threshold: f64,
@@ -88,7 +85,6 @@ pub fn ohpmocd_fn(
         OHPMOCD_DEFAULT_NUM_GENS,
         OHPMOCD_DEFAULT_CROSS_RATE,
         OHPMOCD_DEFAULT_MUT_RATE,
-        max_memberships_per_node,
         init_strategy,
         init_overlap_prob,
         overlap_support_threshold,

@@ -25,29 +25,29 @@ def two_cliques_with_boundary_node():
 
 def test_ohpmocd_crisp_mode():
     G = two_cliques_with_boundary_node()
-    part = pymocd.ohpmocd(G, max_memberships_per_node=1, seed=42)
-
-    assert isinstance(part, dict)
-    for node in G.nodes():
-        assert node in part
-        assert isinstance(part[node], int)
-        assert part[node] >= -1
-
-
-def test_ohpmocd_overlapping_mode_k2():
-    G = two_cliques_with_boundary_node()
-    part = pymocd.ohpmocd(G, max_memberships_per_node=2, seed=42)
+    part = pymocd.ohpmocd(G, init_strategy="crisp", seed=42)
 
     assert isinstance(part, dict)
     for node in G.nodes():
         assert node in part
         assert isinstance(part[node], list)
-        assert 1 <= len(part[node]) <= 2
+        assert len(part[node]) >= 1
+
+
+def test_ohpmocd_overlapping_mode_dynamic():
+    G = two_cliques_with_boundary_node()
+    part = pymocd.ohpmocd(G, init_strategy="boundary_seeded", seed=42)
+
+    assert isinstance(part, dict)
+    for node in G.nodes():
+        assert node in part
+        assert isinstance(part[node], list)
+        assert len(part[node]) >= 1
         for c in part[node]:
             assert isinstance(c, int)
 
 
-def test_ohpmocd_overlapping_mode_top_k3():
+def test_ohpmocd_overlapping_mode_three_cliques():
     G = two_cliques_with_boundary_node()
     # Add a 3rd clique connected to boundary node 4
     for i in range(10, 14):
@@ -56,35 +56,35 @@ def test_ohpmocd_overlapping_mode_top_k3():
     for u in [10, 11, 12]:
         G.add_edge(4, u)
 
-    part = pymocd.ohpmocd(G, max_memberships_per_node=3, seed=42)
+    part = pymocd.ohpmocd(G, init_strategy="boundary_seeded", seed=42)
     assert isinstance(part, dict)
     for node in G.nodes():
         assert node in part
         assert isinstance(part[node], list)
-        assert 1 <= len(part[node]) <= 3
+        assert len(part[node]) >= 1
         for c in part[node]:
             assert isinstance(c, int)
 
 
 def test_ohpmocd_class_pareto_front():
     G = two_cliques_with_boundary_node()
-    alg = pymocd.OhpMocd(G, max_memberships_per_node=3, seed=42)
+    alg = pymocd.OhpMocd(G, seed=42)
     front = alg.generate_pareto_front()
 
     assert isinstance(front, list)
     assert len(front) > 0
     for part, objs in front:
         assert isinstance(part, dict)
-        assert len(objs) == 2
+        assert len(objs) == 3
         for node in G.nodes():
             assert node in part
             assert isinstance(part[node], list)
-            assert 1 <= len(part[node]) <= 3
+            assert len(part[node]) >= 1
 
 
 if __name__ == "__main__":
     test_ohpmocd_crisp_mode()
-    test_ohpmocd_overlapping_mode_k2()
-    test_ohpmocd_overlapping_mode_top_k3()
+    test_ohpmocd_overlapping_mode_dynamic()
+    test_ohpmocd_overlapping_mode_three_cliques()
     test_ohpmocd_class_pareto_front()
-    print("All Top-K OHP-MOCD overlap python tests passed successfully!")
+    print("All dynamic OHP-MOCD overlap python tests passed successfully!")

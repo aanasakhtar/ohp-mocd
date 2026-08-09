@@ -79,13 +79,11 @@ pub fn calculate_ohp_objectives(
     (intra, inter)
 }
 
-/// Calculates the 3rd objective f3 (Equation 6 of course paper):
+/// Calculates the 3rd objective f3: Parameter-Free Intrinsic Overlap Cohesion Penalty
 /// Unsupported Overlap Penalty = avg(1.0 - s_min / s_max) across overlapping nodes.
 pub fn calculate_f3_objective(
     graph: &Graph,
     partition: &OhpPartition,
-    _target_overlap_rate: f64,
-    _alpha: f64,
 ) -> f64 {
     let total_nodes = graph.nodes.len() as f64;
     if total_nodes == 0.0 {
@@ -135,8 +133,6 @@ pub fn evaluate_ohp_population(
     graph: &Graph,
     degrees: &HashMap<NodeId, usize, FxBuildHasher>,
     enable_f3: bool,
-    target_overlap_rate: f64,
-    alpha: f64,
     phase1_active: bool,
 ) {
     individuals.par_iter_mut().for_each(|ind| {
@@ -145,7 +141,7 @@ pub fn evaluate_ohp_population(
             let f3 = if phase1_active {
                 0.0
             } else {
-                calculate_f3_objective(graph, &ind.partition, target_overlap_rate, alpha)
+                calculate_f3_objective(graph, &ind.partition)
             };
             ind.objectives = vec![intra, inter, f3];
         } else {

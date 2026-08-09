@@ -1,6 +1,6 @@
 //! Overlapping High-Performance Multi-Objective Community Detection (OHP-MOCD).
-//! Supports crisp (`max_memberships_per_node = 1`), Top-K overlapping (`max_memberships_per_node >= 2`),
-//! and pluggable population initialization strategies (Crisp, RandomOverlap, BoundarySeeded).
+//! Supports dynamic self-adapting community memberships per node and pluggable
+//! population initialization strategies (Crisp, RandomOverlap, BoundarySeeded).
 //! This Source Code Form is subject to the terms of The GNU General Public License v3.0
 //! Copyright 2025 - Guilherme Santos.
 
@@ -67,27 +67,19 @@ pub fn normalize_ohp_community_ids(graph: &Graph, partition: OhpPartition) -> Oh
 
 pub fn ohp_partition_to_py(
     py: Python<'_>,
-    max_memberships_per_node: usize,
     partition: &OhpPartition,
 ) -> PyResult<Py<PyAny>> {
     let dict = PyDict::new(py);
-    if max_memberships_per_node == 1 {
-        for (&node, m) in partition.iter() {
-            dict.set_item(node, m.primary())?;
-        }
-    } else {
-        for (&node, m) in partition.iter() {
-            let list = PyList::new(py, m.to_vec())?;
-            dict.set_item(node, list)?;
-        }
+    for (&node, m) in partition.iter() {
+        let list = PyList::new(py, m.to_vec())?;
+        dict.set_item(node, list)?;
     }
     Ok(dict.into_any().unbind())
 }
 
-/// NSGA-II Top-K overlapping community detection (OHP-MOCD).
+/// NSGA-II overlapping community detection (OHP-MOCD).
 ///
-/// With ``max_memberships_per_node=1``, behaves identically to HP-MOCD.
-/// With ``max_memberships_per_node >= 2``, detects 1 to K overlapping community memberships per node.
+/// Detects dynamic, self-adapting community memberships per node based on local neighborhood support.
 /// Supports pluggable initialization strategies: ``"crisp"``, ``"random_overlap"``, and ``"boundary_seeded"``.
 #[gen_stub_pyclass]
 #[pyclass]
@@ -98,14 +90,11 @@ pub struct OhpMocd {
     num_gens: usize,
     cross_rate: f64,
     mut_rate: f64,
-    max_memberships_per_node: usize,
     init_strategy: InitializationStrategy,
     overlap_support_threshold: f64,
     overlap_removal_threshold: f64,
     switch_margin: f64,
     enable_f3: bool,
-    target_overlap_rate: f64,
-    alpha: f64,
     seed: Option<u64>,
     py_graph: Option<Py<PyAny>>,
     py_objectives: Vec<Py<PyAny>>,
@@ -128,8 +117,6 @@ impl OhpMocd {
                 graph,
                 degrees,
                 self.enable_f3,
-                self.target_overlap_rate,
-                self.alpha,
                 phase1_active,
             );
             Ok(())
@@ -143,7 +130,7 @@ impl OhpMocd {
 
             for ind in individuals.iter_mut() {
                 let partition_py =
-                    ohp_partition_to_py(py, self.max_memberships_per_node, &ind.partition)?;
+                    ohp_partition_to_py(py, &ind.partition)?;
                 let graph_ref = py_graph.bind(py);
                 let mut objectives = Vec::with_capacity(py_objs.len());
                 for obj in py_objs.iter() {
@@ -173,7 +160,6 @@ impl OhpMocd {
             self.num_gens,
             self.cross_rate,
             self.mut_rate,
-            self.max_memberships_per_node,
             &self.init_strategy,
             self.overlap_support_threshold,
             self.overlap_removal_threshold,
@@ -237,7 +223,6 @@ impl OhpMocd {
         num_gens = 100,
         cross_rate = 0.7,
         mut_rate = 0.5,
-        max_memberships_per_node = 3,
         init_strategy = "boundary_seeded",
         init_overlap_prob = 0.4,
         overlap_support_threshold = 0.15,
@@ -255,7 +240,6 @@ impl OhpMocd {
         num_gens: usize,
         cross_rate: f64,
         mut_rate: f64,
-        max_memberships_per_node: usize,
         init_strategy: &str,
         init_overlap_prob: f64,
         overlap_support_threshold: f64,
@@ -292,9 +276,10 @@ impl OhpMocd {
             .map(|obj_list| obj_list.iter().map(|item| item.unbind()).collect())
             .unwrap_or_default();
 
-        let enable_f3 = max_memberships_per_node >= 2;
-        let target_overlap_rate = DEFAULT_TARGET_OVERLAP_RATE;
-        let alpha = DEFAULT_ALPHA;
+        let enable_f3 = match strat {
+            InitializationStrategy::Crisp => false,
+            _ => true,
+        };
 
         Ok(OhpMocd {
             graph: rust_graph,
@@ -303,14 +288,11 @@ impl OhpMocd {
             num_gens,
             cross_rate,
             mut_rate,
-            max_memberships_per_node,
             init_strategy: strat,
             overlap_support_threshold,
             overlap_removal_threshold,
             switch_margin,
             enable_f3,
-            target_overlap_rate,
-            alpha,
             seed,
             py_graph,
             py_objectives,
@@ -336,11 +318,6 @@ impl OhpMocd {
         self.num_gens
     }
 
-    #[getter]
-    pub fn max_memberships_per_node(&self) -> usize {
-        self.max_memberships_per_node
-    }
-
     #[pyo3(signature = ())]
     pub fn get_convergence_history(&self) -> Vec<f64> {
         self.convergence_history.lock().unwrap().clone()
@@ -353,23 +330,22 @@ impl OhpMocd {
         let mut result = Vec::with_capacity(first_front.len());
         for ind in first_front {
             let norm = normalize_ohp_community_ids(&self.graph, ind.partition);
-            let py_part = ohp_partition_to_py(py, self.max_memberships_per_node, &norm)?;
+            let py_part = ohp_partition_to_py(py, &norm)?;
             result.push((py_part, ind.objectives));
         }
         Ok(result)
     }
 
     /// Run and return the best partition (max-Q from the Pareto front).
-    /// If ``max_memberships_per_node=1``, returns ``dict[node, community]``.
-    /// If ``max_memberships_per_node >= 2``, returns ``dict[node, list[community]]``.
-    /// Isolated nodes get community ``-1``.
+    /// Returns ``dict[node, list[community]]``.
+    /// Isolated nodes get community ``[-1]``.
     #[pyo3(signature = ())]
     pub fn run(&self, py: Python<'_>) -> PyResult<Py<PyAny>> {
         let first_front: Vec<OhpIndividual> = self.envolve(Some(py))?;
         let best_solution: &OhpIndividual = max_q_selection_ohp(&first_front);
         let norm = normalize_ohp_community_ids(&self.graph, best_solution.partition.clone());
 
-        ohp_partition_to_py(py, self.max_memberships_per_node, &norm)
+        ohp_partition_to_py(py, &norm)
     }
 }
 
@@ -418,7 +394,6 @@ mod tests {
             10,
             0.7,
             0.5,
-            3,
             &InitializationStrategy::Crisp,
             DEFAULT_OVERLAP_SUPPORT_THRESHOLD,
             DEFAULT_OVERLAP_REMOVAL_THRESHOLD,
@@ -430,8 +405,6 @@ mod tests {
                     &g,
                     &degrees,
                     false,
-                    DEFAULT_TARGET_OVERLAP_RATE,
-                    DEFAULT_ALPHA,
                     true,
                 );
                 Ok::<(), ()>(())
@@ -445,7 +418,7 @@ mod tests {
             for &node in g.nodes.iter() {
                 assert!(ind.partition.contains_key(&node), "missing node {node}");
                 let m = &ind.partition[&node];
-                assert!(m.len() >= 1 && m.len() <= 3, "invalid membership length");
+                assert!(m.len() >= 1, "invalid membership length");
             }
         }
     }
@@ -470,7 +443,6 @@ mod tests {
                 5,
                 0.7,
                 0.5,
-                2,
                 &strat,
                 DEFAULT_OVERLAP_SUPPORT_THRESHOLD,
                 DEFAULT_OVERLAP_REMOVAL_THRESHOLD,
@@ -482,8 +454,6 @@ mod tests {
                         &g,
                         &degrees,
                         false,
-                        DEFAULT_TARGET_OVERLAP_RATE,
-                        DEFAULT_ALPHA,
                         true,
                     );
                     Ok::<(), ()>(())
