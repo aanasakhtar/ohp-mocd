@@ -206,7 +206,7 @@ def evaluate_single_seed_run(task_tuple: tuple) -> dict[str, float]:
             overlap_support_threshold=0.15,
             overlap_removal_threshold=0.08,
             switch_margin=0.05,
-            seed=seed+42
+            seed=None
         )
     else:
         dict_res = pymocd.ohpmocd(
@@ -216,7 +216,7 @@ def evaluate_single_seed_run(task_tuple: tuple) -> dict[str, float]:
             overlap_support_threshold=0.15,
             overlap_removal_threshold=0.08,
             switch_margin=0.05,
-            seed=seed+42
+            seed=None
         )
     dur = time.perf_counter() - t0
     
