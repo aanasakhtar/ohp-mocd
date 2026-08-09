@@ -221,6 +221,8 @@ def evaluate_single_seed_run(task_tuple: tuple) -> dict[str, float]:
     comm_dict = {}
     for n_idx, comm_list in dict_res.items():
         orig_node = rev_map[n_idx]
+        if isinstance(comm_list, (int, np.integer)):
+            comm_list = [comm_list]
         for cid in comm_list:
             comm_dict.setdefault(cid, set()).add(orig_node)
     comms = list(comm_dict.values())
