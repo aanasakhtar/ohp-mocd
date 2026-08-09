@@ -12,7 +12,7 @@ against reported metric results from 4 published research papers:
    - Metric: Nicosia Qov.
 3. FCCNI (Shang et al., 2024) - docs/66797d469912c.pdf
    - Datasets: Karate, Dolphins, Polbooks, Football.
-   - Metrics: gNMI (Direct comparison against reported gNMI_max) & Shen Extended Modularity EQ (Independent metric).
+   - Metric: gNMI (Direct comparison against reported gNMI_max using onmi against ground truth labels).
 4. Çetin & Amrahov (Kybernetika, 2022) - docs/kybernetika_paper.pdf
    - Datasets: Karate, Dolphins, Lesmis, Polbooks.
    - Metrics: Shen Modularity Q (EQ) & Overlapping Coverage (Formula 9, including k=1 -> Coverage=0).
@@ -144,26 +144,38 @@ def load_karate() -> tuple[nx.Graph, list[frozenset]]:
 def load_lesmis() -> tuple[nx.Graph, None]:
     return nx.les_miserables_graph(), None
 
-def load_newman_gml(zip_name: str) -> nx.Graph:
+def load_newman_gml(zip_name: str, attr_name: str = "value") -> tuple[nx.Graph, list[frozenset]]:
     url = f'http://www-personal.umich.edu/~mejn/netdata/{zip_name}.zip'
     req = urllib.request.Request(url, headers=HEADERS)
     res = urllib.request.urlopen(req)
     z = zipfile.ZipFile(io.BytesIO(res.read()))
     gml_name = [f for f in z.namelist() if f.endswith('.gml')][0]
     content = z.read(gml_name).decode('utf-8', errors='ignore')
-    return nx.parse_gml(content, label='id' if 'id' in content else 'label')
+    G = nx.parse_gml(content, label='id' if 'id' in content else 'label')
+    
+    comms = {}
+    for n in G.nodes():
+        val = G.nodes[n].get(attr_name, None)
+        if val is not None:
+            comms.setdefault(val, set()).add(n)
+    gt = [frozenset(c) for c in comms.values() if len(c) > 0]
+    return G, gt
 
-def load_dolphins() -> tuple[nx.Graph, None]:
-    return load_newman_gml('dolphins'), None
+def load_dolphins() -> tuple[nx.Graph, list[frozenset]]:
+    G, _ = load_newman_gml('dolphins')
+    pod2_names = {'Beak', 'CCL', 'Double', 'Fish', 'Five', 'Fork', 'Gallatin', 'Grin', 'Haekel', 'Hook', 'Kringel', 'Oscar', 'PL', 'SN4', 'SN9', 'SN10', 'Scabs', 'Shakacle', 'SMN', 'Stripes', 'TR77', 'TSN83', 'TSN103', 'Zipfel'}
+    pod2 = frozenset([n for n in G.nodes() if n in pod2_names or str(n) in pod2_names])
+    pod1 = frozenset([n for n in G.nodes() if n not in pod2])
+    return G, [pod1, pod2]
 
-def load_polbooks() -> tuple[nx.Graph, None]:
-    return load_newman_gml('polbooks'), None
+def load_polbooks() -> tuple[nx.Graph, list[frozenset]]:
+    return load_newman_gml('polbooks', attr_name='value')
 
-def load_football() -> tuple[nx.Graph, None]:
-    return load_newman_gml('football'), None
+def load_football() -> tuple[nx.Graph, list[frozenset]]:
+    return load_newman_gml('football', attr_name='value')
 
 def load_netscience() -> tuple[nx.Graph, None]:
-    G = load_newman_gml('netscience')
+    G, _ = load_newman_gml('netscience')
     largest_cc = max(nx.connected_components(G), key=len)
     return G.subgraph(largest_cc).copy(), None
 
@@ -233,9 +245,11 @@ def evaluate_single_seed_run(task_tuple: tuple) -> dict[str, float]:
     dur = time.perf_counter() - t0
     
     comm_dict = {}
-    for n_idx, comm_list in dict_res.items():
+    for n_idx, cid in dict_res.items():
         orig_node = rev_map[n_idx]
-        for cid in comm_list:
+        if isinstance(cid, (list, tuple, set)):
+            for c in cid: comm_dict.setdefault(c, set()).add(orig_node)
+        else:
             comm_dict.setdefault(cid, set()).add(orig_node)
     comms = [set(members) for members in comm_dict.values() if members]
     comm_frozensets = [frozenset(c) for c in comms]
@@ -244,11 +258,20 @@ def evaluate_single_seed_run(task_tuple: tuple) -> dict[str, float]:
     eq = shen_modularity_eq(G, comms)
     cov = overlapping_coverage_cetin(G, comms)
     
-    # Calculate ONMI if ground truth is available
+    # Calculate ONMI (gNMI) if ground truth is available
     onmi_val = 0.0
+    gt = None
     if net_name == "Karate":
-        _, gt_karate = load_karate()
-        onmi_val = onmi(comm_frozensets, gt_karate)
+        _, gt = load_karate()
+    elif net_name == "Dolphins":
+        _, gt = load_dolphins()
+    elif net_name == "Polbooks":
+        _, gt = load_polbooks()
+    elif net_name == "Football":
+        _, gt = load_football()
+        
+    if gt is not None:
+        onmi_val = onmi(comm_frozensets, gt)
         
     return {
         "net_name": net_name,
@@ -372,8 +395,6 @@ def run_paper2_mcmoea_experiment(executor):
     print(" PAPER 2 STRICT COMPARISON: MCMOEA (IEEE TEVC 2016) [Qov] ")
     print("=================================================================")
     
-    # Strictly evaluate on Scientific Collaborators / Netscience (N=379)
-    # (Removed incorrect Polbooks & Lesmis substitutes for Word Assoc 1 & 2)
     mcmoea_reported = [
         {"Dataset": "Scientific Collaborators (Netscience)", "N": 379, "MCMOEA_Qov": 0.48, "Loader": load_netscience},
     ]
@@ -420,15 +441,14 @@ def run_paper2_mcmoea_experiment(executor):
     return df
 
 # -----------------------------------------------------------------------------
-# Paper 3 Experiment: FCCNI (Shang et al., 2024) — Direct gNMI & Independent EQ
+# Paper 3 Experiment: FCCNI (Shang et al., 2024) — Direct gNMI Comparison
 # -----------------------------------------------------------------------------
 
 def run_paper3_fccni_experiment(executor):
     print("\n=================================================================")
-    print(" PAPER 3 STRICT COMPARISON: FCCNI (Shang et al. 2024) [gNMI & EQ] ")
+    print(" PAPER 3 STRICT COMPARISON: FCCNI (Shang et al. 2024) [gNMI] ")
     print("=================================================================")
     
-    # Table 8 in 66797d469912c.pdf
     fccni_table8 = {
         "Karate": {"FCCNI": 1.0000, "SLPA": 0.9183, "MOEA-SAov": 0.9186, "CEMOV": 0.8368},
         "Dolphins": {"FCCNI": 1.0000, "SLPA": 1.0000, "MOEA-SAov": 0.9445, "CEMOV": 0.4232},
@@ -445,7 +465,7 @@ def run_paper3_fccni_experiment(executor):
     
     rows = []
     for net_name, loader in loaders.items():
-        print(f" -> Evaluating {net_name} in Parallel (gNMI Comparison & Independent Shen EQ)...")
+        print(f" -> Evaluating {net_name} in Parallel (Direct Metric: gNMI / ONMI)...")
         G, _ = loader()
         
         res_b = run_ohpmocd_variant_parallel(G, net_name, "boundary_seeded", executor)
@@ -474,13 +494,13 @@ def run_paper3_fccni_experiment(executor):
     
     ax.bar(x - 1.5*width, df["FCCNI_gNMI_max"], width, label="FCCNI Reported ($gNMI$)", color="#1f77b4", edgecolor="black")
     ax.bar(x - 0.5*width, df["SLPA_gNMI_max"], width, label="SLPA Reported ($gNMI$)", color="#e7298a", edgecolor="black")
-    ax.bar(x + 0.5*width, df["OHP_MOCD_BoundarySeeded_Shen_EQ"], width, label="OHP-MOCD BoundarySeeded (Shen EQ)", color="#1b9e77", edgecolor="black")
-    ax.bar(x + 1.5*width, df["OHP_MOCD_Crisp_Shen_EQ"], width, label="OHP-MOCD Crisp (Shen EQ)", color="#d95f02", edgecolor="black")
+    ax.bar(x + 0.5*width, df["OHP_MOCD_BoundarySeeded_gNMI"], width, label="OHP-MOCD BoundarySeeded ($gNMI$)", color="#1b9e77", edgecolor="black")
+    ax.bar(x + 1.5*width, df["OHP_MOCD_Crisp_gNMI"], width, label="OHP-MOCD Crisp ($gNMI$)", color="#d95f02", edgecolor="black")
     
     ax.set_xticks(x)
     ax.set_xticklabels(df["Dataset"])
-    ax.set_ylabel("Quality Score [0, 1]")
-    ax.set_title("Paper 3 Comparison: OHP-MOCD vs. FCCNI Suite ($gNMI$ & Shen $EQ$)", fontweight="bold")
+    ax.set_ylabel("Generalized NMI ($gNMI$) [0, 1]")
+    ax.set_title("Paper 3 Direct Comparison: OHP-MOCD vs. FCCNI Suite ($gNMI$)", fontweight="bold")
     ax.grid(True, linestyle="--", alpha=0.4, axis="y")
     ax.legend(loc="lower right")
     
