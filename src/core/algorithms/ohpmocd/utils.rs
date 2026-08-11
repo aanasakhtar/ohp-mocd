@@ -26,8 +26,7 @@ pub fn max_q_selection<'a>(population: &'a [Individual]) -> &'a Individual {
 pub fn q_ohp(ind: &OhpIndividual) -> f64 {
     let f1 = ind.objectives.get(0).copied().unwrap_or(0.0);
     let f2 = ind.objectives.get(1).copied().unwrap_or(0.0);
-    let f3 = ind.objectives.get(2).copied().unwrap_or(0.0);
-    (1.0 - f1 - f2) - f3
+    1.0 - f1 - f2
 }
 
 #[inline(always)]

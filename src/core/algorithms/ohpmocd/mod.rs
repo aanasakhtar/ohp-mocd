@@ -174,40 +174,35 @@ impl OhpMocd {
                     pop.iter().filter(|ind| ind.rank == 1).collect();
                 let first_front_size = rank1_solutions.len();
 
-                let best_q = rank1_solutions
-                    .iter()
-                    .map(|ind| 1.0 - ind.objectives[0] - ind.objectives[1])
-                    .fold(f64::NEG_INFINITY, f64::max);
-
-                if let Ok(mut hist) = self.convergence_history.lock() {
-                    hist.push(best_q);
-                }
-
-                if self.debug_level >= 1 && (generation % 10 == 0 || generation == num_gens - 1) {
+                if self.debug_level >= 1 {
                     debug!(
                         debug,
-                        "OHP-MOCD NSGA-II: Gen {} | 1st Front/Pop: {}/{} | Best Q: {:.4}",
-                        generation,
+                        "Gen {:3}/{} | Rank1 size: {:3} | Phase1: {}",
+                        generation + 1,
+                        num_gens,
                         first_front_size,
-                        pop.len(),
-                        best_q
+                        generation < phase1_gens
                     );
                 }
 
-                if let Some(cb) = &self.on_generation
-                    && let Some(py) = py
-                {
-                    cb.bind(py)
-                        .call1((generation, num_gens, first_front_size))?;
+                if let Ok(mut hist) = self.convergence_history.lock() {
+                    hist.push(first_front_size as f64);
+                }
+
+                if let Some(ref cb) = self.on_generation {
+                    let py = py.expect("Python token required for callback execution");
+                    let pop_py = PyList::empty(py);
+                    for ind in pop {
+                        let py_part = ohp_partition_to_py(py, &ind.partition)?;
+                        pop_py.append((py_part, &ind.objectives))?;
+                    }
+                    cb.bind(py).call1((generation, num_gens, pop_py))?;
                 }
                 Ok(())
             },
         )?;
 
-        Ok(individuals
-            .into_iter()
-            .filter(|ind| ind.rank == 1)
-            .collect())
+        Ok(individuals)
     }
 }
 
@@ -217,12 +212,11 @@ impl OhpMocd {
     #[new]
     #[pyo3(signature = (
         graph,
-        *,
-        debug_level = 0,
-        pop_size = 100,
-        num_gens = 100,
-        cross_rate = 0.7,
-        mut_rate = 0.5,
+        debug_level = DEFAULT_DEBUG_LEVEL,
+        pop_size = DEFAULT_POP_SIZE,
+        num_gens = DEFAULT_NUM_GENS,
+        cross_rate = DEFAULT_CROSS_RATE,
+        mut_rate = DEFAULT_MUT_RATE,
         init_strategy = "boundary_seeded",
         init_overlap_prob = 0.4,
         overlap_support_threshold = 0.15,
@@ -398,6 +392,8 @@ mod tests {
             DEFAULT_OVERLAP_SUPPORT_THRESHOLD,
             DEFAULT_OVERLAP_REMOVAL_THRESHOLD,
             DEFAULT_SWITCH_MARGIN,
+            false,
+            0.25,
             Some(42),
             |_, inds| {
                 objectives::evaluate_ohp_population(
@@ -447,6 +443,8 @@ mod tests {
                 DEFAULT_OVERLAP_SUPPORT_THRESHOLD,
                 DEFAULT_OVERLAP_REMOVAL_THRESHOLD,
                 DEFAULT_SWITCH_MARGIN,
+                false,
+                0.25,
                 Some(42),
                 |_, inds| {
                     objectives::evaluate_ohp_population(

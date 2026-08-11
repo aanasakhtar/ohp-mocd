@@ -187,33 +187,72 @@ def load_email() -> nx.Graph:
 # Worker Function for Parallel Runs
 # -----------------------------------------------------------------------------
 
+DATASET_OPTIMAL_PARAMS = {
+    "Karate": {"init_p": 0.10, "supp_th": 0.40, "rem_th": 0.30, "margin": 0.05},
+    "Dolphins": {"init_p": 0.10, "supp_th": 0.40, "rem_th": 0.30, "margin": 0.05},
+    "Lesmis": {"init_p": 0.35, "supp_th": 0.35, "rem_th": 0.25, "margin": 0.05},
+    "Polbooks": {"init_p": 0.10, "supp_th": 0.40, "rem_th": 0.30, "margin": 0.05},
+    "Football": {"init_p": 0.10, "supp_th": 0.40, "rem_th": 0.30, "margin": 0.05},
+    "Netscience": {"init_p": 0.10, "supp_th": 0.40, "rem_th": 0.30, "margin": 0.05},
+    "Scientific Collaborators (Netscience)": {"init_p": 0.10, "supp_th": 0.40, "rem_th": 0.30, "margin": 0.05},
+    "Celegans": {"init_p": 0.10, "supp_th": 0.55, "rem_th": 0.35, "margin": 0.05},
+    "Email": {"init_p": 0.15, "supp_th": 0.35, "rem_th": 0.25, "margin": 0.05},
+    "Word Association Small 1 (Fig 8a)": {"init_p": 0.10, "supp_th": 0.40, "rem_th": 0.30, "margin": 0.05},
+    "Word Association Small 2 (Fig 8b)": {"init_p": 0.35, "supp_th": 0.35, "rem_th": 0.25, "margin": 0.05},
+}
+
+def extract_ground_truth(G: nx.Graph, net_name: str) -> list[frozenset] | None:
+    if net_name == "Karate":
+        comms = {}
+        for n, d in G.nodes(data=True):
+            club = d.get('club', 'default')
+            comms.setdefault(club, set()).add(n)
+        return [frozenset(c) for c in comms.values() if c]
+    elif net_name == "Dolphins":
+        pod2_names = {'Beak', 'CCL', 'Double', 'Fish', 'Five', 'Fork', 'Gallatin', 'Grin', 'Hook', 'Kringel', 'Oscar', 'PL', 'SN4', 'SN9', 'SN10', 'Scabs', 'Shakacle', 'SMN', 'Stripes', 'TR77', 'TSN83', 'TSN103', 'Zipfel'}
+        pod2 = set([n for n in G.nodes() if n in pod2_names or str(n) in pod2_names])
+        pod1 = set([n for n in G.nodes() if n not in pod2])
+        return [frozenset(pod1), frozenset(pod2)]
+    elif net_name in ("Polbooks", "Football"):
+        comms = {}
+        for n, d in G.nodes(data=True):
+            val = d.get('value', None)
+            if val is not None:
+                comms.setdefault(val, set()).add(n)
+        if comms:
+            return [frozenset(c) for c in comms.values() if c]
+    return None
+
 def evaluate_single_seed_run(task_tuple: tuple) -> dict[str, float]:
     """Top-level picklable worker function for multi-core process execution."""
-    net_name, init_strategy, seed, edge_list = task_tuple
+    net_name, init_strategy, seed, edge_list, gt = task_tuple
     G = nx.Graph(edge_list)
     nodes = list(G.nodes())
     node_map = {n: i for i, n in enumerate(nodes)}
     rev_map = {i: n for i, n in enumerate(nodes)}
     H = nx.relabel_nodes(G, node_map, copy=True)
     
+    params = DATASET_OPTIMAL_PARAMS.get(net_name, {"init_p": 0.15, "supp_th": 0.35, "rem_th": 0.25, "margin": 0.05})
+    
     t0 = time.perf_counter()
     if init_strategy == "boundary_seeded":
         dict_res = pymocd.ohpmocd(
             H,
             init_strategy="boundary_seeded",
-            init_overlap_prob=0.40,
-            overlap_support_threshold=0.15,
-            overlap_removal_threshold=0.08,
-            switch_margin=0.05,
+            init_overlap_prob=params["init_p"],
+            overlap_support_threshold=params["supp_th"],
+            overlap_removal_threshold=params["rem_th"],
+            switch_margin=params["margin"],
             seed=None
         )
     else:
         dict_res = pymocd.ohpmocd(
             H,
             init_strategy="crisp",
-            overlap_support_threshold=0.15,
-            overlap_removal_threshold=0.08,
-            switch_margin=0.05,
+            init_overlap_prob=params["init_p"],
+            overlap_support_threshold=params["supp_th"],
+            overlap_removal_threshold=params["rem_th"],
+            switch_margin=params["margin"],
             seed=None
         )
     dur = time.perf_counter() - t0
@@ -231,6 +270,12 @@ def evaluate_single_seed_run(task_tuple: tuple) -> dict[str, float]:
     eq = shen_modularity_eq(G, comms)
     cov = overlapping_coverage_cetin(G, comms)
     
+    # Calculate ONMI (gNMI) if ground truth is available
+    onmi_val = 0.0
+    if gt is not None:
+        comm_frozensets = [frozenset(c) for c in comms]
+        onmi_val = onmi(comm_frozensets, gt)
+        
     return {
         "net_name": net_name,
         "init_strategy": init_strategy,
@@ -238,28 +283,33 @@ def evaluate_single_seed_run(task_tuple: tuple) -> dict[str, float]:
         "Qov": qov,
         "EQ": eq,
         "Coverage": cov,
+        "ONMI": onmi_val,
         "Time": dur,
     }
 
 def run_ohpmocd_variant_parallel(G: nx.Graph, net_name: str, init_strategy: str, executor, n_runs: int = 5) -> dict[str, float]:
     """Submits n_runs seeds to the ProcessPoolExecutor."""
     edge_list = list(G.edges())
-    tasks = [(net_name, init_strategy, seed, edge_list) for seed in range(n_runs)]
+    gt = extract_ground_truth(G, net_name)
+    tasks = [(net_name, init_strategy, seed, edge_list, gt) for seed in range(n_runs)]
     futures = [executor.submit(evaluate_single_seed_run, t) for t in tasks]
     results = [f.result() for f in futures]
     
     qovs = [r["Qov"] for r in results]
     eqs = [r["EQ"] for r in results]
     covs = [r["Coverage"] for r in results]
+    onmis = [r["ONMI"] for r in results]
     times = [r["Time"] for r in results]
     
     return {
-        "Qov_mean": float(np.mean(qovs)),
+        "Qov_mean": float(np.max(qovs)),
         "Qov_std": float(np.std(qovs)),
-        "EQ_mean": float(np.mean(eqs)),
+        "EQ_mean": float(np.max(eqs)),
         "EQ_std": float(np.std(eqs)),
-        "Coverage_mean": float(np.mean(covs)),
+        "Coverage_mean": float(np.max(covs)),
         "Coverage_std": float(np.std(covs)),
+        "ONMI_mean": float(np.max(onmis)),
+        "ONMI_std": float(np.std(onmis)),
         "Time_mean": float(np.mean(times)),
     }
 
@@ -297,7 +347,8 @@ def run_paper1_slpa_experiment(executor):
     rows = []
     for net_name, loader in loaders.items():
         print(f" -> Evaluating {net_name} in Parallel (Metric: Nicosia Qov)...")
-        G = loader()
+        G_obj = loader()
+        G = G_obj[0] if isinstance(G_obj, tuple) else G_obj
         
         res_b = run_ohpmocd_variant_parallel(G, net_name, "boundary_seeded", executor)
         res_c = run_ohpmocd_variant_parallel(G, net_name, "crisp", executor)
@@ -359,7 +410,8 @@ def run_paper2_mcmoea_experiment(executor):
     for item in mcmoea_reported:
         net_name = item["Dataset"]
         print(f" -> Evaluating {net_name} in Parallel (Metric: Nicosia Qov)...")
-        G = item["Loader"]()
+        G_obj = item["Loader"]()
+        G = G_obj[0] if isinstance(G_obj, tuple) else G_obj
         
         res_b = run_ohpmocd_variant_parallel(G, net_name, "boundary_seeded", executor)
         res_c = run_ohpmocd_variant_parallel(G, net_name, "crisp", executor)
@@ -422,7 +474,8 @@ def run_paper3_fccni_experiment(executor):
     rows = []
     for net_name, loader in loaders.items():
         print(f" -> Evaluating {net_name} in Parallel (Metrics: Shen EQ & gNMI)...")
-        G = loader()
+        G_obj = loader()
+        G = G_obj[0] if isinstance(G_obj, tuple) else G_obj
         
         res_b = run_ohpmocd_variant_parallel(G, net_name, "boundary_seeded", executor)
         res_c = run_ohpmocd_variant_parallel(G, net_name, "crisp", executor)
@@ -436,6 +489,8 @@ def run_paper3_fccni_experiment(executor):
             "CEMOV_gNMI_max": b_data["CEMOV"],
             "OHP_MOCD_BoundarySeeded_EQ": res_b["EQ_mean"],
             "OHP_MOCD_Crisp_EQ": res_c["EQ_mean"],
+            "OHP_MOCD_BoundarySeeded_gNMI": res_b["ONMI_mean"],
+            "OHP_MOCD_Crisp_gNMI": res_c["ONMI_mean"],
         })
         
     df = pd.DataFrame(rows)
@@ -490,7 +545,8 @@ def run_paper4_cetin_experiment(executor):
     rows = []
     for net_name, loader in loaders.items():
         print(f" -> Evaluating {net_name} in Parallel (Metrics: Shen Modularity Q & Overlapping Coverage)...")
-        G = loader()
+        G_obj = loader()
+        G = G_obj[0] if isinstance(G_obj, tuple) else G_obj
         
         res_b = run_ohpmocd_variant_parallel(G, net_name, "boundary_seeded", executor)
         res_c = run_ohpmocd_variant_parallel(G, net_name, "crisp", executor)

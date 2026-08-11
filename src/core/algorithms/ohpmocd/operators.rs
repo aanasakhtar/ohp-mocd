@@ -19,47 +19,46 @@ use rustc_hash::{FxBuildHasher, FxHashMap, FxHashSet as HashSet};
 
 const ENSEMBLE_SIZE: usize = 4;
 
-/// Calculates neighborhood support for community `c` at node `v`.
-/// support(v, c) = |{u in N(v) : c in M(u)}| / |N(v)|
-pub(crate) fn neighborhood_support_counts(
+/// Extension 1: Degree-Weighted Neighborhood Influence (DWI).
+/// Calculates degree-weighted neighborhood influence for community `c` at node `v`.
+/// influence(v, c) = sum_{u in N(v) : c in M(u)} d(u) / sum_{u in N(v)} d(u)
+pub(crate) fn neighborhood_influence_weights(
     node: NodeId,
     partition: &OhpPartition,
     graph: &Graph,
-) -> FxHashMap<CommunityId, usize> {
-    let mut counts = FxHashMap::default();
+) -> (FxHashMap<CommunityId, f64>, f64) {
+    let mut weights = FxHashMap::default();
+    let mut total_weight = 0.0;
 
     if let Some(neighbors) = graph.adjacency_list.get(&node) {
         for &neighbor in neighbors {
+            let nbr_deg = *graph.degrees.get(&neighbor).unwrap_or(&1) as f64;
+            total_weight += nbr_deg;
             if let Some(m) = partition.get(&neighbor) {
                 for &community in &m.communities {
-                    *counts.entry(community).or_insert(0) += 1;
+                    *weights.entry(community).or_insert(0.0) += nbr_deg;
                 }
             }
         }
     }
 
-    counts
+    (weights, total_weight)
 }
 
 #[inline(always)]
-pub(crate) fn support_ratio_from_counts(
-    support_counts: &FxHashMap<CommunityId, usize>,
-    degree: usize,
+pub(crate) fn influence_ratio_from_weights(
+    weights: &FxHashMap<CommunityId, f64>,
+    total_weight: f64,
     community: CommunityId,
 ) -> f64 {
-    if degree == 0 {
+    if total_weight == 0.0 {
         return 0.0;
     }
 
-    support_counts
-        .get(&community)
-        .copied()
-        .unwrap_or(0) as f64
-        / degree as f64
+    weights.get(&community).copied().unwrap_or(0.0) / total_weight
 }
 
-/// Calculates neighborhood support for community `c` at node `v`.
-/// support(v, c) = |{u in N(v) : c in M(u)}| / |N(v)|
+/// Calculates degree-weighted neighborhood influence for community `c` at node `v`.
 #[allow(dead_code)]
 pub fn calculate_support(
     node: NodeId,
@@ -67,13 +66,8 @@ pub fn calculate_support(
     partition: &OhpPartition,
     graph: &Graph,
 ) -> f64 {
-    let neighbors = match graph.adjacency_list.get(&node) {
-        Some(n) if !n.is_empty() => n,
-        _ => return 0.0,
-    };
-
-    let support_counts = neighborhood_support_counts(node, partition, graph);
-    support_ratio_from_counts(&support_counts, neighbors.len(), community)
+    let (weights, total_weight) = neighborhood_influence_weights(node, partition, graph);
+    influence_ratio_from_weights(&weights, total_weight, community)
 }
 
 /// Phase 4: Pluggable population initialization (Crisp, RandomOverlap, or BoundarySeeded).
@@ -237,13 +231,12 @@ pub fn ensemble_crossover_ohp_with_rng<R: Rng + ?Sized>(
         runner_ups.insert(node, runner_up_candidates);
     }
 
-    // Step 2: Evaluate neighborhood support for runner-ups dynamically
+    // Step 2: Evaluate degree-weighted neighborhood influence (DWI) for runner-ups dynamically
     for &node in &keys {
         if let Some(cands) = runner_ups.get(&node) {
-            let support_counts = neighborhood_support_counts(node, &child, graph);
-            let degree = graph.adjacency_list.get(&node).map_or(0, Vec::len);
+            let (weights, total_weight) = neighborhood_influence_weights(node, &child, graph);
             for &cand in cands {
-                let supp = support_ratio_from_counts(&support_counts, degree, cand);
+                let supp = influence_ratio_from_weights(&weights, total_weight, cand);
                 if supp >= overlap_support_threshold {
                     if let Some(m) = child.get_mut(&node) {
                         if !m.communities.contains(&cand) {
@@ -258,7 +251,7 @@ pub fn ensemble_crossover_ohp_with_rng<R: Rng + ?Sized>(
     child
 }
 
-/// Phase 6: Topology-guided mutation for dynamic memberships (Add / Remove / Switch rules).
+/// Phase 6: Topology-guided mutation with Degree-Weighted Neighborhood Influence (DWI).
 pub fn mutate_ohp_with_rng<R: Rng + ?Sized>(
     partition: &mut OhpPartition,
     graph: &Graph,
@@ -282,13 +275,12 @@ pub fn mutate_ohp_with_rng<R: Rng + ?Sized>(
             continue;
         }
 
-        let neighbors = match graph.adjacency_list.get(&node) {
-            Some(n) if !n.is_empty() => n,
-            _ => continue,
-        };
+        if graph.adjacency_list.get(&node).map_or(true, Vec::is_empty) {
+            continue;
+        }
 
-        let support_counts = neighborhood_support_counts(node, &old_partition, graph);
-        let mut neighbor_comms: Vec<CommunityId> = support_counts.keys().copied().collect();
+        let (weights, total_weight) = neighborhood_influence_weights(node, &old_partition, graph);
+        let mut neighbor_comms: Vec<CommunityId> = weights.keys().copied().collect();
         neighbor_comms.sort_unstable();
 
         if neighbor_comms.is_empty() {
@@ -297,15 +289,15 @@ pub fn mutate_ohp_with_rng<R: Rng + ?Sized>(
 
         let current_m = old_partition[&node].clone();
         let primary_comm = current_m.primary();
-        let primary_supp = support_ratio_from_counts(&support_counts, neighbors.len(), primary_comm);
+        let primary_supp = influence_ratio_from_weights(&weights, total_weight, primary_comm);
 
-        // Rule 3: Switch primary if neighbor community has higher support by switch_margin
+        // Rule 3: Switch primary if neighbor community has higher degree-weighted influence by switch_margin
         let mut best_switch_comm = primary_comm;
         let mut max_switch_supp = primary_supp;
 
         for &c in &neighbor_comms {
             if c != primary_comm {
-                let supp = support_ratio_from_counts(&support_counts, neighbors.len(), c);
+                let supp = influence_ratio_from_weights(&weights, total_weight, c);
                 if supp - primary_supp >= switch_margin && supp > max_switch_supp {
                     max_switch_supp = supp;
                     best_switch_comm = c;
@@ -319,11 +311,14 @@ pub fn mutate_ohp_with_rng<R: Rng + ?Sized>(
             updated_communities.insert(0, best_switch_comm);
         }
 
-        // Rule 2: Remove unsupported additional memberships (indices 1..)
+        // Rule 2: Adaptive degree-normalized removal threshold per node
+        let deg = graph.degree(&node);
+        let node_rem_th = (overlap_removal_threshold / (deg as f64).sqrt().max(1.0)).min(overlap_removal_threshold);
+
         let mut kept = vec![updated_communities[0]];
         for &c in &updated_communities[1..] {
-            let supp = support_ratio_from_counts(&support_counts, neighbors.len(), c);
-            if supp >= overlap_removal_threshold {
+            let supp = influence_ratio_from_weights(&weights, total_weight, c);
+            if supp >= node_rem_th {
                 if !kept.contains(&c) {
                     kept.push(c);
                 }
@@ -331,11 +326,11 @@ pub fn mutate_ohp_with_rng<R: Rng + ?Sized>(
         }
         updated_communities = kept;
 
-        // Rule 1: Add supported additional memberships dynamically based on support threshold
+        // Rule 1: Add supported additional memberships dynamically based on degree-weighted influence threshold
         let mut candidates: Vec<(CommunityId, f64)> = neighbor_comms
             .iter()
             .filter(|&&c| !updated_communities.contains(&c))
-            .map(|&c| (c, support_ratio_from_counts(&support_counts, neighbors.len(), c)))
+            .map(|&c| (c, influence_ratio_from_weights(&weights, total_weight, c)))
             .filter(|&(_, supp)| supp >= overlap_support_threshold)
             .collect();
 
@@ -576,7 +571,48 @@ mod tests {
         .into_iter()
         .collect();
 
-        assert!((calculate_support(2, 0, &part, &g) - 2.0 / 3.0).abs() < 1e-6);
-        assert!((calculate_support(2, 1, &part, &g) - 1.0 / 3.0).abs() < 1e-6);
+        // Under DWI, neighbors of node 2 are 0 (deg 2, comm 0), 1 (deg 2, comm 0), 3 (deg 3, comm 1).
+        // Total weight = 2 + 2 + 3 = 7. Influence(c=0) = 4/7, Influence(c=1) = 3/7.
+        assert!((calculate_support(2, 0, &part, &g) - 4.0 / 7.0).abs() < 1e-6);
+        assert!((calculate_support(2, 1, &part, &g) - 3.0 / 7.0).abs() < 1e-6);
+    }
+
+    #[test]
+    fn test_adaptive_resolution_merge_combines_strongly_connected_communities() {
+        let mut g = Graph::new();
+        // Community 0: nodes 0,1,2; Community 1: nodes 3,4,5; Community 2: nodes 6,7,8
+        // Heavy inter-edges between Community 0 and Community 1 (0-3, 1-4, 2-5)
+        for (a, b) in [
+            (0, 1), (1, 2), (0, 2),
+            (3, 4), (4, 5), (3, 5),
+            (6, 7), (7, 8), (6, 8),
+            (0, 3), (1, 4), (2, 5),
+        ] {
+            g.add_edge(a, b);
+        }
+        g.finalize();
+
+        let mut part: OhpPartition = [
+            (0, OhpMembership::new(0, &[])),
+            (1, OhpMembership::new(0, &[])),
+            (2, OhpMembership::new(0, &[])),
+            (3, OhpMembership::new(1, &[])),
+            (4, OhpMembership::new(1, &[])),
+            (5, OhpMembership::new(1, &[])),
+            (6, OhpMembership::new(2, &[])),
+            (7, OhpMembership::new(2, &[])),
+            (8, OhpMembership::new(2, &[])),
+        ]
+        .into_iter()
+        .collect();
+
+        let mut rng = StdRng::seed_from_u64(42);
+        let merged = try_adaptive_resolution_merge(&mut part, &g, &mut rng);
+
+        assert!(merged, "Adaptive resolution merge should succeed on strongly connected community pair");
+        // Nodes 0..6 should now share community label 0
+        assert_eq!(part[&0].primary(), 0);
+        assert_eq!(part[&3].primary(), 0);
+        assert_eq!(part[&6].primary(), 2);
     }
 }

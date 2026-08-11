@@ -35,7 +35,64 @@ pub fn evaluate_crisp_partition(
     (metrics.intra, metrics.inter)
 }
 
-/// Calculates Shi-style decomposed modularity (intra, inter) for Top-K overlapping partitions in 1 pass over edges.
+/// Computes DWI-proportional soft membership weights r_{v,c} = DWI(v,c) / sum_{c'} DWI(v,c')
+pub(crate) fn compute_dwi_membership_weights(
+    node: NodeId,
+    partition: &OhpPartition,
+    graph: &Graph,
+    degrees: &HashMap<NodeId, usize, FxBuildHasher>,
+) -> FxHashMap<CommunityId, f64> {
+    let mut weights = FxHashMap::default();
+    let membership = match partition.get(&node) {
+        Some(m) if !m.is_empty() => m,
+        _ => return weights,
+    };
+
+    if membership.len() == 1 {
+        weights.insert(membership.primary(), 1.0);
+        return weights;
+    }
+
+    let mut raw_dwi = FxHashMap::default();
+    let mut total_dwi_sum = 0.0;
+
+    if let Some(neighbors) = graph.adjacency_list.get(&node) {
+        let mut total_neighbor_deg = 0.0;
+        for &neighbor in neighbors {
+            let nbr_deg = *degrees.get(&neighbor).unwrap_or(&1) as f64;
+            total_neighbor_deg += nbr_deg;
+            if let Some(m) = partition.get(&neighbor) {
+                for &c in &m.communities {
+                    if membership.contains(c) {
+                        *raw_dwi.entry(c).or_insert(0.0) += nbr_deg;
+                    }
+                }
+            }
+        }
+        if total_neighbor_deg > 0.0 {
+            for val in raw_dwi.values_mut() {
+                *val /= total_neighbor_deg;
+                total_dwi_sum += *val;
+            }
+        }
+    }
+
+    if total_dwi_sum > 0.0 {
+        for &c in &membership.communities {
+            let dwi_val = raw_dwi.get(&c).copied().unwrap_or(0.0);
+            weights.insert(c, dwi_val / total_dwi_sum);
+        }
+    } else {
+        let unif = 1.0 / membership.len() as f64;
+        for &c in &membership.communities {
+            weights.insert(c, unif);
+        }
+    }
+
+    weights
+}
+
+/// Calculates Shi-style decomposed modularity (intra, inter) using DWI-proportional soft membership weights.
 pub fn calculate_ohp_objectives(
     graph: &Graph,
     partition: &OhpPartition,
@@ -46,12 +103,17 @@ pub fn calculate_ohp_objectives(
         return (0.0, 0.0);
     }
 
+    let mut node_weights: FxHashMap<NodeId, FxHashMap<CommunityId, f64>> = FxHashMap::default();
+    for &node in partition.keys() {
+        let w_map = compute_dwi_membership_weights(node, partition, graph, degrees);
+        node_weights.insert(node, w_map);
+    }
+
     let mut community_degrees: FxHashMap<CommunityId, f64> = FxHashMap::default();
-    for (&node, membership) in partition.iter() {
+    for (&node, w_map) in &node_weights {
         let deg = *degrees.get(&node).unwrap_or(&0) as f64;
-        let weight = deg / membership.len() as f64;
-        for &comm in &membership.communities {
-            *community_degrees.entry(comm).or_insert(0.0) += weight;
+        for (&comm, &r_vc) in w_map {
+            *community_degrees.entry(comm).or_insert(0.0) += deg * r_vc;
         }
     }
 
@@ -63,12 +125,10 @@ pub fn calculate_ohp_objectives(
 
     let mut intra_sum = 0.0;
     for (u, v) in &graph.edges {
-        if let (Some(m_u), Some(m_v)) = (partition.get(u), partition.get(v)) {
-            let w_u = 1.0 / m_u.len() as f64;
-            let w_v = 1.0 / m_v.len() as f64;
-            for &c_u in &m_u.communities {
-                if m_v.contains(c_u) {
-                    intra_sum += w_u * w_v;
+        if let (Some(w_u_map), Some(w_v_map)) = (node_weights.get(u), node_weights.get(v)) {
+            for (&c_u, &r_uc) in w_u_map {
+                if let Some(&r_vc) = w_v_map.get(&c_u) {
+                    intra_sum += r_uc * r_vc;
                 }
             }
         }
