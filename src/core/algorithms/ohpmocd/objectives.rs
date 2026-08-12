@@ -91,8 +91,61 @@ pub(crate) fn compute_dwi_membership_weights(
 
     weights
 }
+/// Computes OCCSA-proportional soft membership weights r_{v,c} = d_in(v,c) / Σ_{c'} d_in(v,c')
+/// where d_in(v,c) = |{u ∈ N(v) : c ∈ M(u)}| — the unweighted neighbor count in community c.
+/// This matches the OCCSA membership assignment criterion (Shang et al. 2024) used in the operators,
+/// ensuring geometric consistency between membership decisions and objective evaluation.
+/// When all communities have zero in-degree (isolated node), falls back to uniform 1/|M(v)|.
+pub(crate) fn compute_occsa_membership_weights(
+    node: NodeId,
+    partition: &OhpPartition,
+    graph: &Graph,
+) -> FxHashMap<CommunityId, f64> {
+    let mut weights = FxHashMap::default();
+    let membership = match partition.get(&node) {
+        Some(m) if !m.is_empty() => m,
+        _ => return weights,
+    };
 
-/// Calculates Shi-style decomposed modularity (intra, inter) using DWI-proportional soft membership weights.
+    if membership.len() == 1 {
+        weights.insert(membership.primary(), 1.0);
+        return weights;
+    }
+
+    // Count how many neighbors of v are in each of v's communities (unweighted).
+    let mut raw_counts: FxHashMap<CommunityId, f64> = FxHashMap::default();
+    if let Some(neighbors) = graph.adjacency_list.get(&node) {
+        for &neighbor in neighbors {
+            if let Some(m) = partition.get(&neighbor) {
+                for &c in &m.communities {
+                    if membership.contains(c) {
+                        *raw_counts.entry(c).or_insert(0.0) += 1.0;
+                    }
+                }
+            }
+        }
+    }
+
+    let total_count: f64 = raw_counts.values().sum();
+    if total_count > 0.0 {
+        for &c in &membership.communities {
+            let count = raw_counts.get(&c).copied().unwrap_or(0.0);
+            weights.insert(c, count / total_count);
+        }
+    } else {
+        // Fallback: uniform weights when node has no covered neighbors.
+        let unif = 1.0 / membership.len() as f64;
+        for &c in &membership.communities {
+            weights.insert(c, unif);
+        }
+    }
+
+    weights
+}
+
+/// Calculates Shi-style decomposed modularity (intra, inter) using OCCSA-proportional soft membership weights.
+/// OCCSA weights r_{v,c} = d_in(v,c)/Σ_c' d_in(v,c') match the unweighted membership assignment operators,
+/// ensuring f1/f2 are geometrically consistent with how NSGA-II assigns community memberships.
 pub fn calculate_ohp_objectives(
     graph: &Graph,
     partition: &OhpPartition,
@@ -103,9 +156,10 @@ pub fn calculate_ohp_objectives(
         return (0.0, 0.0);
     }
 
+    // Use OCCSA weights for consistency with membership assignment operators.
     let mut node_weights: FxHashMap<NodeId, FxHashMap<CommunityId, f64>> = FxHashMap::default();
     for &node in partition.keys() {
-        let w_map = compute_dwi_membership_weights(node, partition, graph, degrees);
+        let w_map = compute_occsa_membership_weights(node, partition, graph);
         node_weights.insert(node, w_map);
     }
 
@@ -118,11 +172,14 @@ pub fn calculate_ohp_objectives(
     }
 
     let total_edges_doubled = 2.0 * total_edges;
+
+    // f2: Inter-community modularity penalty (squared degree sum — prevents large-volume communities).
     let mut inter_sum = 0.0;
     for &comm_deg in community_degrees.values() {
         inter_sum += (comm_deg / total_edges_doubled).powi(2);
     }
 
+    // f1: Intra-community edge coverage weighted by soft DWI memberships.
     let mut intra_sum = 0.0;
     for (u, v) in &graph.edges {
         if let (Some(w_u_map), Some(w_v_map)) = (node_weights.get(u), node_weights.get(v)) {
@@ -139,7 +196,9 @@ pub fn calculate_ohp_objectives(
     (intra, inter)
 }
 
-/// Calculates the 3rd objective f3: Parameter-Free Intrinsic Overlap Cohesion Penalty
+/// Calculates the 3rd objective f3: Parameter-Free Intrinsic Overlap Cohesion Penalty.
+/// Governs the quality of overlapping memberships: penalizes overlapping nodes whose community
+/// support fractions are highly imbalanced (s_min / s_max << 1), pruning weakly-supported overlaps.
 /// Unsupported Overlap Penalty = avg(1.0 - s_min / s_max) across overlapping nodes.
 pub fn calculate_f3_objective(
     graph: &Graph,

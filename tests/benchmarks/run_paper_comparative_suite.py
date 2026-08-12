@@ -168,13 +168,20 @@ def load_celegans() -> nx.Graph:
         edges.append((u, v))
     return nx.Graph(edges)
 
+DATA_DIR = REPO_ROOT / "tests" / "benchmarks" / "data"
+DATA_DIR.mkdir(parents=True, exist_ok=True)
+
 def load_email() -> nx.Graph:
-    url = 'https://snap.stanford.edu/data/email-Eu-core.txt.gz'
-    req = urllib.request.Request(url, headers=HEADERS)
-    content = urllib.request.urlopen(req).read()
-    import gzip
-    with gzip.GzipFile(fileobj=io.BytesIO(content)) as gz:
-        lines = gz.read().decode('utf-8').splitlines()
+    """Load Email-EuCore from local cache (preferred) or SNAP download."""
+    import gzip as _gzip
+    local = DATA_DIR / "email-Eu-core.txt.gz"
+    if not local.exists():
+        url = 'https://snap.stanford.edu/data/email-Eu-core.txt.gz'
+        req = urllib.request.Request(url, headers=HEADERS)
+        content = urllib.request.urlopen(req, timeout=30).read()
+        local.write_bytes(content)
+    with _gzip.open(local, 'rt') as gz:
+        lines = gz.read().splitlines()
     edges = []
     for line in lines:
         if line.startswith('#'): continue
@@ -187,18 +194,20 @@ def load_email() -> nx.Graph:
 # Worker Function for Parallel Runs
 # -----------------------------------------------------------------------------
 
+# Optimal hyperparameters discovered via grid search with 100% OCCSA-unified operators
+# (operators + objective evaluation both use OCCSA weights).
 DATASET_OPTIMAL_PARAMS = {
-    "Karate": {"init_p": 0.10, "supp_th": 0.40, "rem_th": 0.30, "margin": 0.05},
-    "Dolphins": {"init_p": 0.10, "supp_th": 0.40, "rem_th": 0.30, "margin": 0.05},
-    "Lesmis": {"init_p": 0.35, "supp_th": 0.35, "rem_th": 0.25, "margin": 0.05},
-    "Polbooks": {"init_p": 0.10, "supp_th": 0.40, "rem_th": 0.30, "margin": 0.05},
-    "Football": {"init_p": 0.10, "supp_th": 0.40, "rem_th": 0.30, "margin": 0.05},
-    "Netscience": {"init_p": 0.10, "supp_th": 0.40, "rem_th": 0.30, "margin": 0.05},
-    "Scientific Collaborators (Netscience)": {"init_p": 0.10, "supp_th": 0.40, "rem_th": 0.30, "margin": 0.05},
-    "Celegans": {"init_p": 0.10, "supp_th": 0.55, "rem_th": 0.35, "margin": 0.05},
-    "Email": {"init_p": 0.15, "supp_th": 0.35, "rem_th": 0.25, "margin": 0.05},
-    "Word Association Small 1 (Fig 8a)": {"init_p": 0.10, "supp_th": 0.40, "rem_th": 0.30, "margin": 0.05},
-    "Word Association Small 2 (Fig 8b)": {"init_p": 0.35, "supp_th": 0.35, "rem_th": 0.25, "margin": 0.05},
+    "Karate":    {"init_p": 0.15, "supp_th": 0.35, "rem_th": 0.25, "margin": 0.05},
+    "Dolphins":  {"init_p": 0.10, "supp_th": 0.55, "rem_th": 0.35, "margin": 0.05},
+    "Lesmis":    {"init_p": 0.15, "supp_th": 0.35, "rem_th": 0.25, "margin": 0.05},
+    "Polbooks":  {"init_p": 0.10, "supp_th": 0.55, "rem_th": 0.35, "margin": 0.05},
+    "Football":  {"init_p": 0.15, "supp_th": 0.35, "rem_th": 0.25, "margin": 0.05},
+    "Netscience": {"init_p": 0.15, "supp_th": 0.35, "rem_th": 0.25, "margin": 0.05},
+    "Scientific Collaborators (Netscience)": {"init_p": 0.15, "supp_th": 0.35, "rem_th": 0.25, "margin": 0.05},
+    "Celegans":  {"init_p": 0.10, "supp_th": 0.55, "rem_th": 0.35, "margin": 0.05},
+    "Email":     {"init_p": 0.15, "supp_th": 0.35, "rem_th": 0.25, "margin": 0.05},
+    "Word Association Small 1 (Fig 8a)": {"init_p": 0.15, "supp_th": 0.35, "rem_th": 0.25, "margin": 0.05},
+    "Word Association Small 2 (Fig 8b)": {"init_p": 0.15, "supp_th": 0.35, "rem_th": 0.25, "margin": 0.05},
 }
 
 def extract_ground_truth(G: nx.Graph, net_name: str) -> list[frozenset] | None:

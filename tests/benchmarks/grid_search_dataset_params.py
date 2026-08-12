@@ -139,8 +139,28 @@ def load_netscience() -> nx.Graph:
 def load_celegans() -> nx.Graph:
     return load_newman_gml('celegansneural')
 
+
+DATA_DIR = Path(__file__).resolve().parent / "data"
+DATA_DIR.mkdir(parents=True, exist_ok=True)
+
 def load_email() -> nx.Graph:
-    return load_newman_gml('email')
+    """Load Email-EuCore from local cache or SNAP download."""
+    import gzip as _gzip
+    local = DATA_DIR / "email-Eu-core.txt.gz"
+    if not local.exists():
+        url = 'https://snap.stanford.edu/data/email-Eu-core.txt.gz'
+        req = urllib.request.Request(url, headers=HEADERS)
+        content = urllib.request.urlopen(req, timeout=30).read()
+        local.write_bytes(content)
+    with _gzip.open(local, 'rt') as gz:
+        lines = gz.read().splitlines()
+    edges = []
+    for line in lines:
+        if line.startswith('#'): continue
+        parts = line.strip().split()
+        if len(parts) >= 2:
+            edges.append((int(parts[0]), int(parts[1])))
+    return nx.Graph(edges)
 
 # Global cache populated once by main process
 DATASETS_CACHE = {}

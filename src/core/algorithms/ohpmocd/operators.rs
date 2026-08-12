@@ -70,6 +70,29 @@ pub fn calculate_support(
     influence_ratio_from_weights(&weights, total_weight, community)
 }
 
+/// FCCNI-inspired OCCSA structural fitness ratio: d_in(v,c) / d(v).
+/// From Shang et al. (2024): the Lancichinetti community fitness contribution of node v to c.
+/// Unlike DWI (degree-weighted), this is purely topological — all neighbors count equally.
+/// Unweighted counting better aligns with ground-truth community recovery (gNMI/ONMI).
+/// Returns a value in [0.0, 1.0]. Complexity: O(d(v)).
+pub(crate) fn occsa_fitness_ratio(
+    node: NodeId,
+    community: CommunityId,
+    partition: &OhpPartition,
+    graph: &Graph,
+) -> f64 {
+    let neighbors = match graph.adjacency_list.get(&node) {
+        Some(n) if !n.is_empty() => n,
+        _ => return 0.0,
+    };
+    let deg = neighbors.len() as f64;
+    let d_in = neighbors
+        .iter()
+        .filter(|&&u| partition.get(&u).map_or(false, |m| m.contains(community)))
+        .count() as f64;
+    d_in / deg
+}
+
 /// Phase 4: Pluggable population initialization (Crisp, RandomOverlap, or BoundarySeeded).
 pub fn generate_population_ohp_seeded(
     graph: &Graph,
@@ -231,13 +254,16 @@ pub fn ensemble_crossover_ohp_with_rng<R: Rng + ?Sized>(
         runner_ups.insert(node, runner_up_candidates);
     }
 
-    // Step 2: Evaluate degree-weighted neighborhood influence (DWI) for runner-ups dynamically
+    // Step 2: Evaluate overlap admission using OCCSA fitness ratio (FCCNI-inspired).
+    // OCCSA: unweighted Lancichinetti fitness d_in/d(v) — degree-agnostic, aligns with ground-truth topology.
+    // DWI (degree-weighted) is commented out to isolate the effect of pure OCCSA scoring.
     for &node in &keys {
         if let Some(cands) = runner_ups.get(&node) {
-            let (weights, total_weight) = neighborhood_influence_weights(node, &child, graph);
+            // let (weights, total_weight) = neighborhood_influence_weights(node, &child, graph);
             for &cand in cands {
-                let supp = influence_ratio_from_weights(&weights, total_weight, cand);
-                if supp >= overlap_support_threshold {
+                // let dwi = influence_ratio_from_weights(&weights, total_weight, cand);
+                let occsa = occsa_fitness_ratio(node, cand, &child, graph);
+                if occsa >= overlap_support_threshold {
                     if let Some(m) = child.get_mut(&node) {
                         if !m.communities.contains(&cand) {
                             m.communities.push(cand);
@@ -279,8 +305,17 @@ pub fn mutate_ohp_with_rng<R: Rng + ?Sized>(
             continue;
         }
 
-        let (weights, total_weight) = neighborhood_influence_weights(node, &old_partition, graph);
-        let mut neighbor_comms: Vec<CommunityId> = weights.keys().copied().collect();
+        let mut neighbor_comms_set = HashSet::default();
+        if let Some(neighbors) = graph.adjacency_list.get(&node) {
+            for &nbr in neighbors {
+                if let Some(m) = old_partition.get(&nbr) {
+                    for &c in &m.communities {
+                        neighbor_comms_set.insert(c);
+                    }
+                }
+            }
+        }
+        let mut neighbor_comms: Vec<CommunityId> = neighbor_comms_set.into_iter().collect();
         neighbor_comms.sort_unstable();
 
         if neighbor_comms.is_empty() {
@@ -289,15 +324,15 @@ pub fn mutate_ohp_with_rng<R: Rng + ?Sized>(
 
         let current_m = old_partition[&node].clone();
         let primary_comm = current_m.primary();
-        let primary_supp = influence_ratio_from_weights(&weights, total_weight, primary_comm);
+        let primary_supp = occsa_fitness_ratio(node, primary_comm, &old_partition, graph);
 
-        // Rule 3: Switch primary if neighbor community has higher degree-weighted influence by switch_margin
+        // Rule 3: Switch primary if neighbor community has higher OCCSA fitness ratio by switch_margin
         let mut best_switch_comm = primary_comm;
         let mut max_switch_supp = primary_supp;
 
         for &c in &neighbor_comms {
             if c != primary_comm {
-                let supp = influence_ratio_from_weights(&weights, total_weight, c);
+                let supp = occsa_fitness_ratio(node, c, &old_partition, graph);
                 if supp - primary_supp >= switch_margin && supp > max_switch_supp {
                     max_switch_supp = supp;
                     best_switch_comm = c;
@@ -311,13 +346,13 @@ pub fn mutate_ohp_with_rng<R: Rng + ?Sized>(
             updated_communities.insert(0, best_switch_comm);
         }
 
-        // Rule 2: Adaptive degree-normalized removal threshold per node
+        // Rule 2: Adaptive degree-normalized removal threshold per node using OCCSA fitness ratio
         let deg = graph.degree(&node);
         let node_rem_th = (overlap_removal_threshold / (deg as f64).sqrt().max(1.0)).min(overlap_removal_threshold);
 
         let mut kept = vec![updated_communities[0]];
         for &c in &updated_communities[1..] {
-            let supp = influence_ratio_from_weights(&weights, total_weight, c);
+            let supp = occsa_fitness_ratio(node, c, &old_partition, graph);
             if supp >= node_rem_th {
                 if !kept.contains(&c) {
                     kept.push(c);
@@ -326,12 +361,19 @@ pub fn mutate_ohp_with_rng<R: Rng + ?Sized>(
         }
         updated_communities = kept;
 
-        // Rule 1: Add supported additional memberships dynamically based on degree-weighted influence threshold
+        // Rule 1: Add supported additional memberships using OCCSA fitness ratio (FCCNI-inspired).
+        // OCCSA (Shang et al. 2024): unweighted Lancichinetti fitness d_in/d(v) — degree-agnostic,
+        // better-aligned with ground-truth topology for gNMI improvement.
+        // DWI (degree-weighted) is commented out to isolate the effect of pure OCCSA scoring.
         let mut candidates: Vec<(CommunityId, f64)> = neighbor_comms
             .iter()
             .filter(|&&c| !updated_communities.contains(&c))
-            .map(|&c| (c, influence_ratio_from_weights(&weights, total_weight, c)))
-            .filter(|&(_, supp)| supp >= overlap_support_threshold)
+            .map(|&c| {
+                // let dwi = influence_ratio_from_weights(&weights, total_weight, c);
+                let occsa = occsa_fitness_ratio(node, c, &old_partition, graph);
+                (c, occsa)
+            })
+            .filter(|&(_, score)| score >= overlap_support_threshold)
             .collect();
 
         candidates.sort_unstable_by(|a, b| {
