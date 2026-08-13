@@ -189,6 +189,7 @@ pub fn calculate_ohp_objectives(
     graph: &Graph,
     partition: &OhpPartition,
     degrees: &HashMap<NodeId, usize, FxBuildHasher>,
+    alpha: f64,
 ) -> (f64, f64) {
     let total_edges = graph.edges.len() as f64;
     if total_edges == 0.0 {
@@ -198,7 +199,7 @@ pub fn calculate_ohp_objectives(
     // Use combined OCCSA+DWI weights for consistency with membership assignment operators.
     let mut node_weights: FxHashMap<NodeId, FxHashMap<CommunityId, f64>> = FxHashMap::default();
     for &node in partition.keys() {
-        let w_map = compute_combined_membership_weights(node, partition, graph, degrees, 0.5);
+        let w_map = compute_combined_membership_weights(node, partition, graph, degrees, alpha);
         node_weights.insert(node, w_map);
     }
 
@@ -242,6 +243,8 @@ pub fn calculate_ohp_objectives(
 pub fn calculate_f3_objective(
     graph: &Graph,
     partition: &OhpPartition,
+    degrees: &HashMap<NodeId, usize, FxBuildHasher>,
+    alpha: f64,
 ) -> f64 {
     let total_nodes = graph.nodes.len() as f64;
     if total_nodes == 0.0 {
@@ -254,27 +257,18 @@ pub fn calculate_f3_objective(
     for (&node, membership) in partition.iter() {
         if membership.len() > 1 {
             overlapping_nodes_count += 1.0;
+            let w_map = compute_combined_membership_weights(node, partition, graph, degrees, alpha);
 
-            if let Some(neighbors) = graph.adjacency_list.get(&node) {
-                let deg = neighbors.len() as f64;
-                if deg > 0.0 {
-                    let mut s_min = 1.0;
-                    let mut s_max = 0.0;
-                    for &comm in &membership.communities {
-                        let count = neighbors.iter()
-                            .filter(|&&nbr| {
-                                partition.get(&nbr).map_or(false, |m| m.contains(comm))
-                            })
-                            .count() as f64;
-                        let s = count / deg;
-                        if s < s_min { s_min = s; }
-                        if s > s_max { s_max = s; }
-                    }
-                    if s_max > 0.0 {
-                        let support_ratio = s_min / s_max;
-                        total_unsupported_penalty += 1.0 - support_ratio;
-                    }
-                }
+            let mut s_min = 1.0;
+            let mut s_max = 0.0;
+            for &comm in &membership.communities {
+                let s = w_map.get(&comm).copied().unwrap_or(0.0);
+                if s < s_min { s_min = s; }
+                if s > s_max { s_max = s; }
+            }
+            if s_max > 0.0 {
+                let support_ratio = s_min / s_max;
+                total_unsupported_penalty += 1.0 - support_ratio;
             }
         }
     }
@@ -290,16 +284,17 @@ pub fn evaluate_ohp_population(
     individuals: &mut [OhpIndividual],
     graph: &Graph,
     degrees: &HashMap<NodeId, usize, FxBuildHasher>,
+    alpha: f64,
     enable_f3: bool,
     phase1_active: bool,
 ) {
     individuals.par_iter_mut().for_each(|ind| {
-        let (intra, inter) = calculate_ohp_objectives(graph, &ind.partition, degrees);
+        let (intra, inter) = calculate_ohp_objectives(graph, &ind.partition, degrees, alpha);
         if enable_f3 {
             let f3 = if phase1_active {
                 0.0
             } else {
-                calculate_f3_objective(graph, &ind.partition)
+                calculate_f3_objective(graph, &ind.partition, degrees, alpha)
             };
             ind.objectives = vec![intra, inter, f3];
         } else {

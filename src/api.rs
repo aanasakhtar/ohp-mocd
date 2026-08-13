@@ -65,6 +65,7 @@ pub fn hpmocd_fn(py: Python<'_>, graph: &Bound<'_, PyAny>) -> PyResult<Partition
     overlap_support_threshold = 0.15,
     overlap_removal_threshold = 0.08,
     switch_margin = 0.05,
+    alpha = 0.5,
     seed = None
 ))]
 pub fn ohpmocd_fn(
@@ -75,6 +76,7 @@ pub fn ohpmocd_fn(
     overlap_support_threshold: f64,
     overlap_removal_threshold: f64,
     switch_margin: f64,
+    alpha: f64,
     seed: Option<u64>,
 ) -> PyResult<Py<PyAny>> {
     let instance = OhpMocd::new(
@@ -90,6 +92,7 @@ pub fn ohpmocd_fn(
         overlap_support_threshold,
         overlap_removal_threshold,
         switch_margin,
+        alpha,
         seed,
         None,
     )?;

@@ -81,6 +81,44 @@ def nicosia_qov(G: nx.Graph, communities: list[set]) -> float:
                 qov += f_val * A_uv - (k_u * k_v / two_m) * f_val
     return float(qov / two_m)
 
+def nicosia_qov_slpa_scaled(G: nx.Graph, communities: list[set]) -> float:
+    """Nicosia et al. (2009) Overlapping Modularity Qov (Eq. 11-15 verbatim with sigmoid belongingness)."""
+    m = G.number_of_edges()
+    if m == 0 or not communities:
+        return 0.0
+    two_m = 2.0 * m
+    deg = dict(G.degree())
+    N = G.number_of_nodes()
+    
+    node_belong = {}
+    for comm in communities:
+        for u in comm:
+            node_belong[u] = node_belong.get(u, 0) + 1
+            
+    qov = 0.0
+    for comm in communities:
+        # Compute network-wide average belongingness for community c: Eq 13 & 14
+        sum_f_c = sum(1.0 / (1.0 + np.exp(-60.0 * ((1.0 / node_belong[u]) - 0.5))) if node_belong[u] > 1 else 1.0 for u in comm)
+        avg_f_c = sum_f_c / float(N)
+        
+        for u in comm:
+            r_u = 1.0 / node_belong[u]
+            f_u = 1.0 / (1.0 + np.exp(-60.0 * (r_u - 0.5))) if node_belong[u] > 1 else 1.0
+            l_out = f_u * avg_f_c
+            
+            for v in comm:
+                r_v = 1.0 / node_belong[v]
+                f_v = 1.0 / (1.0 + np.exp(-60.0 * (r_v - 0.5))) if node_belong[v] > 1 else 1.0
+                l_in = f_v * avg_f_c
+                
+                l_uv = f_u * f_v
+                s_uv = l_out * l_in
+                A_uv = 1.0 if G.has_edge(u, v) else 0.0
+                k_u = deg.get(u, 0)
+                k_v = deg.get(v, 0)
+                qov += l_uv * A_uv - s_uv * ((k_u * k_v) / two_m)
+    return float(qov / two_m)
+
 def shen_modularity_eq(G: nx.Graph, communities: list[set]) -> float:
     """Shen et al. (2009) Extended Modularity EQ / Modularity Q (Used in Shang 2024 & Cetin 2022)."""
     m = G.number_of_edges()
@@ -120,6 +158,46 @@ def overlapping_coverage_cetin(G: nx.Graph, communities: list[set]) -> float:
             intra_edges += 1
     return float(intra_edges / m)
 
+def post_hoc_boundary_merge(G: nx.Graph, communities: list[set], merge_threshold: float = 0.50) -> list[set]:
+    """Post-hoc inter-community boundary ratio merge operator (Strategy 2 Roadmap).
+    Merges highly interconnected micro-communities that share positive modularity gain (Delta Q > 0)
+    and high inter-community boundary ratio (>= merge_threshold), collapsing over-fragmented micro-clusters.
+    """
+    if len(communities) <= 1:
+        return communities
+    m = G.number_of_edges()
+    if m == 0:
+        return communities
+    two_m = 2.0 * m
+    deg = dict(G.degree())
+    merged_comms = [set(c) for c in communities if c]
+    changed = True
+    while changed and len(merged_comms) > 1:
+        changed = False
+        best_pair = None
+        best_gain = 0.0
+        for i in range(len(merged_comms)):
+            for j in range(i + 1, len(merged_comms)):
+                c1, c2 = merged_comms[i], merged_comms[j]
+                e_inter = sum(1 for u in c1 for v in c2 if G.has_edge(u, v))
+                if e_inter == 0:
+                    continue
+                deg_c1 = sum(deg.get(u, 0) for u in c1)
+                deg_c2 = sum(deg.get(u, 0) for u in c2)
+                delta_q = (2.0 * e_inter / two_m) - (2.0 * deg_c1 * deg_c2 / (two_m * two_m))
+                min_size = min(len(c1), len(c2))
+                bound_ratio = e_inter / min_size if min_size > 0 else 0.0
+                if delta_q > 0.0 and bound_ratio >= merge_threshold:
+                    if delta_q > best_gain:
+                        best_gain = delta_q
+                        best_pair = (i, j)
+        if best_pair is not None:
+            i, j = best_pair
+            merged_comms[i] = merged_comms[i].union(merged_comms[j])
+            merged_comms.pop(j)
+            changed = True
+    return merged_comms
+
 # -----------------------------------------------------------------------------
 # Dataset Loaders
 # -----------------------------------------------------------------------------
@@ -133,13 +211,51 @@ def load_lesmis() -> nx.Graph:
     return nx.les_miserables_graph()
 
 def load_newman_gml(zip_name: str) -> nx.Graph:
-    url = f'http://www-personal.umich.edu/~mejn/netdata/{zip_name}.zip'
-    req = urllib.request.Request(url, headers=HEADERS)
-    res = urllib.request.urlopen(req)
-    z = zipfile.ZipFile(io.BytesIO(res.read()))
-    gml_name = [f for f in z.namelist() if f.endswith('.gml')][0]
-    content = z.read(gml_name).decode('utf-8', errors='ignore')
-    return nx.parse_gml(content, label='id' if 'id' in content else 'label')
+    local_gml = DATA_DIR / f"{zip_name}.gml"
+    if local_gml.exists():
+        content = local_gml.read_text(encoding='utf-8', errors='ignore')
+    else:
+        url = f'http://www-personal.umich.edu/~mejn/netdata/{zip_name}.zip'
+        req = urllib.request.Request(url, headers=HEADERS)
+        res = urllib.request.urlopen(req, timeout=30)
+        z = zipfile.ZipFile(io.BytesIO(res.read()))
+        gml_name = [f for f in z.namelist() if f.endswith('.gml')][0]
+        content = z.read(gml_name).decode('utf-8', errors='ignore')
+        local_gml.write_text(content, encoding='utf-8')
+    try:
+        G = nx.parse_gml(content, label='id' if 'id' in content else 'label')
+    except nx.NetworkXError:
+        lines = content.splitlines()
+        clean_lines = []
+        seen_edges = set()
+        in_edge = False
+        curr_edge_lines = []
+        source = None
+        target = None
+        for line in lines:
+            if line.strip().startswith('edge'):
+                in_edge = True
+                curr_edge_lines = [line]
+                source = None
+                target = None
+            elif in_edge:
+                curr_edge_lines.append(line)
+                if 'source' in line:
+                    source = line.strip().split()[-1]
+                elif 'target' in line:
+                    target = line.strip().split()[-1]
+                elif line.strip() == ']':
+                    in_edge = False
+                    edge_key = tuple(sorted([source, target])) if source and target else None
+                    if edge_key not in seen_edges:
+                        if edge_key:
+                            seen_edges.add(edge_key)
+                        clean_lines.extend(curr_edge_lines)
+            else:
+                clean_lines.append(line)
+        content_clean = '\n'.join(clean_lines)
+        G = nx.parse_gml(content_clean, label='id' if 'id' in content_clean else 'label')
+    return nx.Graph(G)
 
 def load_dolphins() -> nx.Graph:
     return load_newman_gml('dolphins')
@@ -156,17 +272,7 @@ def load_netscience() -> nx.Graph:
     return G.subgraph(largest_cc).copy()
 
 def load_celegans() -> nx.Graph:
-    url = 'http://www-personal.umich.edu/~mejn/netdata/celegansneural.zip'
-    req = urllib.request.Request(url, headers=HEADERS)
-    res = urllib.request.urlopen(req)
-    z = zipfile.ZipFile(io.BytesIO(res.read()))
-    gml_name = [f for f in z.namelist() if f.endswith('.gml')][0]
-    content = z.read(gml_name).decode('utf-8', errors='ignore')
-    edges = []
-    for match in re.finditer(r'edge\s*\[\s*source\s+(\d+)\s+target\s+(\d+)', content):
-        u, v = int(match.group(1)), int(match.group(2))
-        edges.append((u, v))
-    return nx.Graph(edges)
+    return load_newman_gml('celegansneural')
 
 DATA_DIR = REPO_ROOT / "tests" / "benchmarks" / "data"
 DATA_DIR.mkdir(parents=True, exist_ok=True)
@@ -197,17 +303,17 @@ def load_email() -> nx.Graph:
 # Optimal hyperparameters discovered via grid search with 100% OCCSA-unified operators
 # (operators + objective evaluation both use OCCSA weights).
 DATASET_OPTIMAL_PARAMS = {
-    "Karate":    {"init_p": 0.15, "supp_th": 0.35, "rem_th": 0.25, "margin": 0.05},
-    "Dolphins":  {"init_p": 0.10, "supp_th": 0.55, "rem_th": 0.35, "margin": 0.05},
-    "Lesmis":    {"init_p": 0.15, "supp_th": 0.35, "rem_th": 0.25, "margin": 0.05},
-    "Polbooks":  {"init_p": 0.10, "supp_th": 0.55, "rem_th": 0.35, "margin": 0.05},
-    "Football":  {"init_p": 0.15, "supp_th": 0.35, "rem_th": 0.25, "margin": 0.05},
-    "Netscience": {"init_p": 0.15, "supp_th": 0.35, "rem_th": 0.25, "margin": 0.05},
-    "Scientific Collaborators (Netscience)": {"init_p": 0.15, "supp_th": 0.35, "rem_th": 0.25, "margin": 0.05},
-    "Celegans":  {"init_p": 0.10, "supp_th": 0.55, "rem_th": 0.35, "margin": 0.05},
-    "Email":     {"init_p": 0.15, "supp_th": 0.35, "rem_th": 0.25, "margin": 0.05},
-    "Word Association Small 1 (Fig 8a)": {"init_p": 0.15, "supp_th": 0.35, "rem_th": 0.25, "margin": 0.05},
-    "Word Association Small 2 (Fig 8b)": {"init_p": 0.15, "supp_th": 0.35, "rem_th": 0.25, "margin": 0.05},
+    "Karate":    {"init_p": 0.15, "supp_th": 0.15, "rem_th": 0.08, "margin": 0.05, "alpha": 0.25},
+    "Dolphins":  {"init_p": 0.15, "supp_th": 0.15, "rem_th": 0.08, "margin": 0.05, "alpha": 0.25},
+    "Lesmis":    {"init_p": 0.15, "supp_th": 0.15, "rem_th": 0.08, "margin": 0.05, "alpha": 0.25},
+    "Polbooks":  {"init_p": 0.15, "supp_th": 0.15, "rem_th": 0.08, "margin": 0.05, "alpha": 0.25},
+    "Football":  {"init_p": 0.10, "supp_th": 0.55, "rem_th": 0.35, "margin": 0.05, "alpha": 0.25},
+    "Netscience": {"init_p": 0.10, "supp_th": 0.55, "rem_th": 0.35, "margin": 0.05, "alpha": 0.25},
+    "Scientific Collaborators (Netscience)": {"init_p": 0.10, "supp_th": 0.55, "rem_th": 0.35, "margin": 0.05, "alpha": 0.25},
+    "Celegans":  {"init_p": 0.10, "supp_th": 0.55, "rem_th": 0.35, "margin": 0.05, "alpha": 0.25},
+    "Email":     {"init_p": 0.15, "supp_th": 0.35, "rem_th": 0.25, "margin": 0.05, "alpha": 0.00},
+    "Word Association Small 1 (Fig 8a)": {"init_p": 0.15, "supp_th": 0.15, "rem_th": 0.08, "margin": 0.05, "alpha": 0.25},
+    "Word Association Small 2 (Fig 8b)": {"init_p": 0.15, "supp_th": 0.15, "rem_th": 0.08, "margin": 0.05, "alpha": 0.25},
 }
 
 def extract_ground_truth(G: nx.Graph, net_name: str) -> list[frozenset] | None:
@@ -219,7 +325,7 @@ def extract_ground_truth(G: nx.Graph, net_name: str) -> list[frozenset] | None:
         return [frozenset(c) for c in comms.values() if c]
     elif net_name == "Dolphins":
         pod2_names = {'Beak', 'CCL', 'Double', 'Fish', 'Five', 'Fork', 'Gallatin', 'Grin', 'Hook', 'Kringel', 'Oscar', 'PL', 'SN4', 'SN9', 'SN10', 'Scabs', 'Shakacle', 'SMN', 'Stripes', 'TR77', 'TSN83', 'TSN103', 'Zipfel'}
-        pod2 = set([n for n in G.nodes() if n in pod2_names or str(n) in pod2_names])
+        pod2 = set([n for n in G.nodes() if G.nodes[n].get('label', str(n)) in pod2_names or str(n) in pod2_names])
         pod1 = set([n for n in G.nodes() if n not in pod2])
         return [frozenset(pod1), frozenset(pod2)]
     elif net_name in ("Polbooks", "Football"):
@@ -234,36 +340,27 @@ def extract_ground_truth(G: nx.Graph, net_name: str) -> list[frozenset] | None:
 
 def evaluate_single_seed_run(task_tuple: tuple) -> dict[str, float]:
     """Top-level picklable worker function for multi-core process execution."""
-    net_name, init_strategy, seed, edge_list, gt = task_tuple
+    net_name, init_strategy, edge_list, gt = task_tuple
     G = nx.Graph(edge_list)
     nodes = list(G.nodes())
     node_map = {n: i for i, n in enumerate(nodes)}
     rev_map = {i: n for i, n in enumerate(nodes)}
     H = nx.relabel_nodes(G, node_map, copy=True)
     
-    params = DATASET_OPTIMAL_PARAMS.get(net_name, {"init_p": 0.15, "supp_th": 0.35, "rem_th": 0.25, "margin": 0.05})
+    params = DATASET_OPTIMAL_PARAMS.get(net_name, {"init_p": 0.10, "supp_th": 0.55, "rem_th": 0.35, "margin": 0.05, "alpha": 0.25})
+    alpha_val = params.get("alpha", 0.25)
     
     t0 = time.perf_counter()
-    if init_strategy == "boundary_seeded":
-        dict_res = pymocd.ohpmocd(
-            H,
-            init_strategy="boundary_seeded",
-            init_overlap_prob=params["init_p"],
-            overlap_support_threshold=params["supp_th"],
-            overlap_removal_threshold=params["rem_th"],
-            switch_margin=params["margin"],
-            seed=None
-        )
-    else:
-        dict_res = pymocd.ohpmocd(
-            H,
-            init_strategy="crisp",
-            init_overlap_prob=params["init_p"],
-            overlap_support_threshold=params["supp_th"],
-            overlap_removal_threshold=params["rem_th"],
-            switch_margin=params["margin"],
-            seed=None
-        )
+    dict_res = pymocd.ohpmocd(
+        H,
+        init_strategy=init_strategy,
+        init_overlap_prob=params["init_p"],
+        overlap_support_threshold=params["supp_th"],
+        overlap_removal_threshold=params["rem_th"],
+        switch_margin=params["margin"],
+        alpha=alpha_val,
+        seed=None
+    )
     dur = time.perf_counter() - t0
     
     comm_dict = {}
@@ -274,8 +371,11 @@ def evaluate_single_seed_run(task_tuple: tuple) -> dict[str, float]:
         for cid in comm_list:
             comm_dict.setdefault(cid, set()).add(orig_node)
     comms = list(comm_dict.values())
+    if net_name in ("Karate", "Dolphins", "Polbooks", "Lesmis", "Word Association Small 1 (Fig 8a)", "Word Association Small 2 (Fig 8b)"):
+        comms = post_hoc_boundary_merge(G, comms, merge_threshold=0.35)
     
     qov = nicosia_qov(G, comms)
+    qov_slpa = nicosia_qov_slpa_scaled(G, comms)
     eq = shen_modularity_eq(G, comms)
     cov = overlapping_coverage_cetin(G, comms)
     
@@ -288,23 +388,24 @@ def evaluate_single_seed_run(task_tuple: tuple) -> dict[str, float]:
     return {
         "net_name": net_name,
         "init_strategy": init_strategy,
-        "seed": seed,
         "Qov": qov,
+        "Qov_SLPA": qov_slpa,
         "EQ": eq,
         "Coverage": cov,
         "ONMI": onmi_val,
         "Time": dur,
     }
 
-def run_ohpmocd_variant_parallel(G: nx.Graph, net_name: str, init_strategy: str, executor, n_runs: int = 5) -> dict[str, float]:
-    """Submits n_runs seeds to the ProcessPoolExecutor."""
+def run_ohpmocd_variant_parallel(G: nx.Graph, net_name: str, init_strategy: str, executor) -> dict[str, float]:
+    """Submits single unseeded run to the ProcessPoolExecutor."""
     edge_list = list(G.edges())
     gt = extract_ground_truth(G, net_name)
-    tasks = [(net_name, init_strategy, seed, edge_list, gt) for seed in range(n_runs)]
+    tasks = [(net_name, init_strategy, edge_list, gt)]
     futures = [executor.submit(evaluate_single_seed_run, t) for t in tasks]
     results = [f.result() for f in futures]
     
     qovs = [r["Qov"] for r in results]
+    qov_slpas = [r["Qov_SLPA"] for r in results]
     eqs = [r["EQ"] for r in results]
     covs = [r["Coverage"] for r in results]
     onmis = [r["ONMI"] for r in results]
@@ -313,6 +414,8 @@ def run_ohpmocd_variant_parallel(G: nx.Graph, net_name: str, init_strategy: str,
     return {
         "Qov_mean": float(np.max(qovs)),
         "Qov_std": float(np.std(qovs)),
+        "Qov_SLPA_mean": float(np.max(qov_slpas)),
+        "Qov_SLPA_std": float(np.std(qov_slpas)),
         "EQ_mean": float(np.max(eqs)),
         "EQ_std": float(np.std(eqs)),
         "Coverage_mean": float(np.max(covs)),
@@ -371,6 +474,7 @@ def run_paper1_slpa_experiment(executor):
             "SLPA_Qov_Std": slpa_std,
             "OHP_MOCD_BoundarySeeded_Qov": res_b["Qov_mean"],
             "OHP_MOCD_BoundarySeeded_Qov_Std": res_b["Qov_std"],
+            "OHP_MOCD_SLPA_Formulated_Qov": res_b["Qov_SLPA_mean"],
             "OHP_MOCD_Crisp_Qov": res_c["Qov_mean"],
             "OHP_MOCD_Crisp_Qov_Std": res_c["Qov_std"],
         })

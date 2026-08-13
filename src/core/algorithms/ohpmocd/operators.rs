@@ -227,6 +227,7 @@ pub fn ensemble_crossover_ohp_with_rng<R: Rng + ?Sized>(
     parents: &[&OhpPartition],
     graph: &Graph,
     overlap_support_threshold: f64,
+    alpha: f64,
     rng: &mut R,
 ) -> OhpPartition {
     if parents.is_empty() {
@@ -283,7 +284,7 @@ pub fn ensemble_crossover_ohp_with_rng<R: Rng + ?Sized>(
     for &node in &keys {
         if let Some(cands) = runner_ups.get(&node) {
             for &cand in cands {
-                let weight = combined_influence_weight(node, cand, &child, graph, DEFAULT_ALPHA);
+                let weight = combined_influence_weight(node, cand, &child, graph, alpha);
                 if weight >= overlap_support_threshold {
                     if let Some(m) = child.get_mut(&node) {
                         if !m.communities.contains(&cand) {
@@ -306,6 +307,7 @@ pub fn mutate_ohp_with_rng<R: Rng + ?Sized>(
     overlap_support_threshold: f64,
     overlap_removal_threshold: f64,
     switch_margin: f64,
+    alpha: f64,
     rng: &mut R,
 ) {
     if mutation_rate == 0.0 || partition.is_empty() {
@@ -345,7 +347,7 @@ pub fn mutate_ohp_with_rng<R: Rng + ?Sized>(
 
         let current_m = old_partition[&node].clone();
         let primary_comm = current_m.primary();
-        let primary_supp = combined_influence_weight(node, primary_comm, &old_partition, graph, DEFAULT_ALPHA);
+        let primary_supp = combined_influence_weight(node, primary_comm, &old_partition, graph, alpha);
 
         // Rule 3: Switch primary if neighbor community has higher combined weight by switch_margin
         let mut best_switch_comm = primary_comm;
@@ -353,7 +355,7 @@ pub fn mutate_ohp_with_rng<R: Rng + ?Sized>(
 
         for &c in &neighbor_comms {
             if c != primary_comm {
-                let supp = combined_influence_weight(node, c, &old_partition, graph, DEFAULT_ALPHA);
+                let supp = combined_influence_weight(node, c, &old_partition, graph, alpha);
                 if supp - primary_supp >= switch_margin && supp > max_switch_supp {
                     max_switch_supp = supp;
                     best_switch_comm = c;
@@ -373,7 +375,7 @@ pub fn mutate_ohp_with_rng<R: Rng + ?Sized>(
 
         let mut kept = vec![updated_communities[0]];
         for &c in &updated_communities[1..] {
-            let supp = combined_influence_weight(node, c, &old_partition, graph, DEFAULT_ALPHA);
+            let supp = combined_influence_weight(node, c, &old_partition, graph, alpha);
             if supp >= node_rem_th {
                 if !kept.contains(&c) {
                     kept.push(c);
@@ -387,7 +389,7 @@ pub fn mutate_ohp_with_rng<R: Rng + ?Sized>(
             .iter()
             .filter(|&&c| !updated_communities.contains(&c))
             .map(|&c| {
-                let score = combined_influence_weight(node, c, &old_partition, graph, DEFAULT_ALPHA);
+                let score = combined_influence_weight(node, c, &old_partition, graph, alpha);
                 (c, score)
             })
             .filter(|&(_, score)| score >= overlap_support_threshold)
@@ -441,6 +443,7 @@ pub fn create_offspring_ohp_seeded(
     overlap_support_threshold: f64,
     overlap_removal_threshold: f64,
     switch_margin: f64,
+    alpha: f64,
     rng: &mut StdRng,
 ) -> Vec<OhpIndividual> {
     let pop_size = population.len();
@@ -471,6 +474,7 @@ pub fn create_offspring_ohp_seeded(
                     &parent_partitions,
                     graph,
                     overlap_support_threshold,
+                    alpha,
                     &mut local_rng,
                 )
             } else {
@@ -484,6 +488,7 @@ pub fn create_offspring_ohp_seeded(
                 overlap_support_threshold,
                 overlap_removal_threshold,
                 switch_margin,
+                alpha,
                 &mut local_rng,
             );
 
@@ -525,6 +530,7 @@ pub fn mutate_with_rng(
         DEFAULT_OVERLAP_SUPPORT_THRESHOLD,
         DEFAULT_OVERLAP_REMOVAL_THRESHOLD,
         DEFAULT_SWITCH_MARGIN,
+        DEFAULT_ALPHA,
         rng,
     );
     *partition = ohp_to_crisp(&ohp);
@@ -549,6 +555,7 @@ pub fn create_offspring_seeded(
         DEFAULT_OVERLAP_SUPPORT_THRESHOLD,
         DEFAULT_OVERLAP_REMOVAL_THRESHOLD,
         DEFAULT_SWITCH_MARGIN,
+        DEFAULT_ALPHA,
         rng,
     );
     ohp_offspring.into_iter().map(Into::into).collect()

@@ -94,6 +94,7 @@ pub struct OhpMocd {
     overlap_support_threshold: f64,
     overlap_removal_threshold: f64,
     switch_margin: f64,
+    alpha: f64,
     enable_f3: bool,
     seed: Option<u64>,
     py_graph: Option<Py<PyAny>>,
@@ -116,6 +117,7 @@ impl OhpMocd {
                 individuals,
                 graph,
                 degrees,
+                self.alpha,
                 self.enable_f3,
                 phase1_active,
             );
@@ -164,6 +166,7 @@ impl OhpMocd {
             self.overlap_support_threshold,
             self.overlap_removal_threshold,
             self.switch_margin,
+            self.alpha,
             self.seed,
             |generation, inds| {
                 let phase1_active = generation < phase1_gens;
@@ -222,6 +225,7 @@ impl OhpMocd {
         overlap_support_threshold = 0.15,
         overlap_removal_threshold = 0.08,
         switch_margin = 0.05,
+        alpha = 0.5,
         seed = None,
         objectives = None
     ))]
@@ -239,6 +243,7 @@ impl OhpMocd {
         overlap_support_threshold: f64,
         overlap_removal_threshold: f64,
         switch_margin: f64,
+        alpha: f64,
         seed: Option<u64>,
         objectives: Option<&Bound<'_, PyList>>,
     ) -> PyResult<Self> {
@@ -286,6 +291,7 @@ impl OhpMocd {
             overlap_support_threshold,
             overlap_removal_threshold,
             switch_margin,
+            alpha,
             enable_f3,
             seed,
             py_graph,

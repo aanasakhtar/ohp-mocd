@@ -150,6 +150,7 @@ pub fn evolve_ohp<E>(
     overlap_support_threshold: f64,
     overlap_removal_threshold: f64,
     switch_margin: f64,
+    alpha: f64,
     seed: Option<u64>,
     mut evaluate: impl FnMut(usize, &mut [OhpIndividual]) -> Result<(), E>,
     mut on_generation: impl FnMut(usize, usize, &[OhpIndividual]) -> Result<(), E>,
@@ -179,6 +180,7 @@ pub fn evolve_ohp<E>(
             overlap_support_threshold,
             overlap_removal_threshold,
             switch_margin,
+            alpha,
             &mut rng,
         );
 
