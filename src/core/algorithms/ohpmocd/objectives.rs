@@ -143,9 +143,48 @@ pub(crate) fn compute_occsa_membership_weights(
     weights
 }
 
-/// Calculates Shi-style decomposed modularity (intra, inter) using OCCSA-proportional soft membership weights.
-/// OCCSA weights r_{v,c} = d_in(v,c)/Σ_c' d_in(v,c') match the unweighted membership assignment operators,
-/// ensuring f1/f2 are geometrically consistent with how NSGA-II assigns community memberships.
+/// Computes combined soft membership weights r_{v,c} = \alpha * r_{v,c}^{OCCSA} + (1 - \alpha) * r_{v,c}^{DWI} (alpha = 0.5)
+/// Balancing unweighted topological in-degree count with degree-weighted neighbor influence.
+pub(crate) fn compute_combined_membership_weights(
+    node: NodeId,
+    partition: &OhpPartition,
+    graph: &Graph,
+    degrees: &HashMap<NodeId, usize, FxBuildHasher>,
+    alpha: f64,
+) -> FxHashMap<CommunityId, f64> {
+    let occsa_w = compute_occsa_membership_weights(node, partition, graph);
+    if alpha >= 1.0 {
+        return occsa_w;
+    }
+    let dwi_w = compute_dwi_membership_weights(node, partition, graph, degrees);
+    if alpha <= 0.0 {
+        return dwi_w;
+    }
+
+    let membership = match partition.get(&node) {
+        Some(m) if !m.is_empty() => m,
+        _ => return FxHashMap::default(),
+    };
+
+    let mut combined = FxHashMap::default();
+    let mut total = 0.0;
+    for &c in &membership.communities {
+        let w_occsa = occsa_w.get(&c).copied().unwrap_or(0.0);
+        let w_dwi = dwi_w.get(&c).copied().unwrap_or(0.0);
+        let val = alpha * w_occsa + (1.0 - alpha) * w_dwi;
+        combined.insert(c, val);
+        total += val;
+    }
+
+    if total > 0.0 {
+        for val in combined.values_mut() {
+            *val /= total;
+        }
+    }
+    combined
+}
+
+/// Calculates Shi-style decomposed modularity (intra, inter) using combined soft membership weights (alpha=0.5).
 pub fn calculate_ohp_objectives(
     graph: &Graph,
     partition: &OhpPartition,
@@ -156,10 +195,10 @@ pub fn calculate_ohp_objectives(
         return (0.0, 0.0);
     }
 
-    // Use OCCSA weights for consistency with membership assignment operators.
+    // Use combined OCCSA+DWI weights for consistency with membership assignment operators.
     let mut node_weights: FxHashMap<NodeId, FxHashMap<CommunityId, f64>> = FxHashMap::default();
     for &node in partition.keys() {
-        let w_map = compute_occsa_membership_weights(node, partition, graph);
+        let w_map = compute_combined_membership_weights(node, partition, graph, degrees, 0.5);
         node_weights.insert(node, w_map);
     }
 
