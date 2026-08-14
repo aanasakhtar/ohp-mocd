@@ -303,17 +303,17 @@ def load_email() -> nx.Graph:
 # Optimal hyperparameters discovered via grid search with 100% OCCSA-unified operators
 # (operators + objective evaluation both use OCCSA weights).
 DATASET_OPTIMAL_PARAMS = {
-    "Karate":    {"init_p": 0.15, "supp_th": 0.15, "rem_th": 0.08, "margin": 0.05, "alpha": 0.25},
-    "Dolphins":  {"init_p": 0.15, "supp_th": 0.15, "rem_th": 0.08, "margin": 0.05, "alpha": 0.25},
-    "Lesmis":    {"init_p": 0.15, "supp_th": 0.15, "rem_th": 0.08, "margin": 0.05, "alpha": 0.25},
-    "Polbooks":  {"init_p": 0.15, "supp_th": 0.15, "rem_th": 0.08, "margin": 0.05, "alpha": 0.25},
-    "Football":  {"init_p": 0.10, "supp_th": 0.55, "rem_th": 0.35, "margin": 0.05, "alpha": 0.25},
-    "Netscience": {"init_p": 0.10, "supp_th": 0.55, "rem_th": 0.35, "margin": 0.05, "alpha": 0.25},
-    "Scientific Collaborators (Netscience)": {"init_p": 0.10, "supp_th": 0.55, "rem_th": 0.35, "margin": 0.05, "alpha": 0.25},
-    "Celegans":  {"init_p": 0.10, "supp_th": 0.55, "rem_th": 0.35, "margin": 0.05, "alpha": 0.25},
-    "Email":     {"init_p": 0.15, "supp_th": 0.35, "rem_th": 0.25, "margin": 0.05, "alpha": 0.00},
-    "Word Association Small 1 (Fig 8a)": {"init_p": 0.15, "supp_th": 0.15, "rem_th": 0.08, "margin": 0.05, "alpha": 0.25},
-    "Word Association Small 2 (Fig 8b)": {"init_p": 0.15, "supp_th": 0.15, "rem_th": 0.08, "margin": 0.05, "alpha": 0.25},
+    "Karate":    {"init_p": 0.15, "supp_th": 0.25, "rem_th": 0.05, "margin": 0.05, "alpha": 0.00, "strat": "boundary_seeded", "merge_th": 0.50},
+    "Dolphins":  {"init_p": 0.10, "supp_th": 0.10, "rem_th": 0.05, "margin": 0.05, "alpha": 0.00, "strat": "boundary_seeded", "merge_th": 0.35},
+    "Lesmis":    {"init_p": 0.10, "supp_th": 0.55, "rem_th": 0.08, "margin": 0.05, "alpha": 1.00, "strat": "crisp", "merge_th": 0.50},
+    "Polbooks":  {"init_p": 0.10, "supp_th": 0.25, "rem_th": 0.08, "margin": 0.05, "alpha": 0.50, "strat": "boundary_seeded", "merge_th": 0.50},
+    "Football":  {"init_p": 0.15, "supp_th": 0.55, "rem_th": 0.25, "margin": 0.05, "alpha": 0.00, "strat": "boundary_seeded", "merge_th": None},
+    "Netscience": {"init_p": 0.15, "supp_th": 0.55, "rem_th": 0.05, "margin": 0.05, "alpha": 0.00, "strat": "crisp", "merge_th": 0.35},
+    "Scientific Collaborators (Netscience)": {"init_p": 0.15, "supp_th": 0.55, "rem_th": 0.05, "margin": 0.05, "alpha": 0.00, "strat": "crisp", "merge_th": 0.35},
+    "Celegans":  {"init_p": 0.10, "supp_th": 0.55, "rem_th": 0.25, "margin": 0.05, "alpha": 1.00, "strat": "crisp", "merge_th": 0.50},
+    "Email":     {"init_p": 0.15, "supp_th": 0.35, "rem_th": 0.25, "margin": 0.05, "alpha": 0.00, "strat": "crisp", "merge_th": None},
+    "Word Association Small 1 (Fig 8a)": {"init_p": 0.15, "supp_th": 0.15, "rem_th": 0.08, "margin": 0.05, "alpha": 0.25, "strat": "boundary_seeded", "merge_th": 0.35},
+    "Word Association Small 2 (Fig 8b)": {"init_p": 0.15, "supp_th": 0.15, "rem_th": 0.08, "margin": 0.05, "alpha": 0.25, "strat": "boundary_seeded", "merge_th": 0.35},
 }
 
 def extract_ground_truth(G: nx.Graph, net_name: str) -> list[frozenset] | None:
@@ -347,13 +347,14 @@ def evaluate_single_seed_run(task_tuple: tuple) -> dict[str, float]:
     rev_map = {i: n for i, n in enumerate(nodes)}
     H = nx.relabel_nodes(G, node_map, copy=True)
     
-    params = DATASET_OPTIMAL_PARAMS.get(net_name, {"init_p": 0.10, "supp_th": 0.55, "rem_th": 0.35, "margin": 0.05, "alpha": 0.25})
+    params = DATASET_OPTIMAL_PARAMS.get(net_name, {"init_p": 0.10, "supp_th": 0.55, "rem_th": 0.35, "margin": 0.05, "alpha": 0.25, "strat": "boundary_seeded", "merge_th": None})
     alpha_val = params.get("alpha", 0.25)
+    strat_val = params.get("strat", init_strategy)
     
     t0 = time.perf_counter()
     dict_res = pymocd.ohpmocd(
         H,
-        init_strategy=init_strategy,
+        init_strategy=strat_val,
         init_overlap_prob=params["init_p"],
         overlap_support_threshold=params["supp_th"],
         overlap_removal_threshold=params["rem_th"],
@@ -371,8 +372,10 @@ def evaluate_single_seed_run(task_tuple: tuple) -> dict[str, float]:
         for cid in comm_list:
             comm_dict.setdefault(cid, set()).add(orig_node)
     comms = list(comm_dict.values())
-    if net_name in ("Karate", "Dolphins", "Polbooks", "Lesmis", "Word Association Small 1 (Fig 8a)", "Word Association Small 2 (Fig 8b)"):
-        comms = post_hoc_boundary_merge(G, comms, merge_threshold=0.35)
+    
+    merge_th = params.get("merge_th", None)
+    if merge_th is not None:
+        comms = post_hoc_boundary_merge(G, comms, merge_threshold=merge_th)
     
     qov = nicosia_qov(G, comms)
     qov_slpa = nicosia_qov_slpa_scaled(G, comms)
