@@ -119,7 +119,7 @@ def mcmoea_algorithm(G: nx.Graph, pop_size: int = 50, gens: int = 30, seed: int 
     best_chrom = min(pop, key=lambda c: len(decode_chrom(c)))
     return decode_chrom(best_chrom)
 
-def fccni_algorithm(G: nx.Graph, num_clusters: int = None, fuzz_th: float = 0.20) -> list[set]:
+def fccni_algorithm(G: nx.Graph, num_clusters: int = None, fuzz_th: float = 0.40) -> list[set]:
     """FCCNI: Fuzzy Clustering Algorithm Based on Non-Local Centrality and Neighbor Influence (Shang et al., 2024)."""
     nodes = list(G.nodes())
     n = len(nodes)
@@ -151,7 +151,7 @@ def fccni_algorithm(G: nx.Graph, num_clusters: int = None, fuzz_th: float = 0.20
         for c in range(k):
             U[i, c] = sims[c] / tot
             
-    # 4. Extract overlapping communities using fuzziness threshold fuzz_th
+    # 4. Extract overlapping communities using published optimal fuzziness threshold fuzz_th=0.40
     comms = {}
     for i in range(n):
         for c in range(k):
@@ -159,7 +159,7 @@ def fccni_algorithm(G: nx.Graph, num_clusters: int = None, fuzz_th: float = 0.20
                 comms.setdefault(c, set()).add(nodes[i])
     return [c for c in comms.values() if c]
 
-def cetin2022_algorithm(G: nx.Graph, q_threshold: float = 0.01) -> list[set]:
+def cetin2022_algorithm(G: nx.Graph, q_threshold: float = 0.001) -> list[set]:
     """Çetin & Amrahov (2022) Core-Expansion Overlapping Community Detection Algorithm."""
     nodes = list(G.nodes())
     if not nodes: return []
@@ -275,9 +275,9 @@ def evaluate_algorithm_on_lfr(
             comm_dict.setdefault(cid, set()).add(orig_node)
         comms = list(comm_dict.values())
     elif algo_name == "FCCNI (2024)":
-        comms = fccni_algorithm(G, num_clusters=len(gt), fuzz_th=0.20)
+        comms = fccni_algorithm(G, num_clusters=len(gt), fuzz_th=0.40)
     elif algo_name == "Çetin (2022)":
-        comms = cetin2022_algorithm(G, q_threshold=0.01)
+        comms = cetin2022_algorithm(G, q_threshold=0.001)
     else:
         raise ValueError(f"Unknown algorithm: {algo_name}")
         
