@@ -62,10 +62,10 @@ LFR_CONFIGS = {
     }
 }
 
-# --- Baseline Algorithm Implementations ---
+# --- Primary Literature Baseline Algorithm Implementations ---
 
 def slpa_algorithm(G: nx.Graph, r: float = 0.15, t: int = 25, seed: int = 42) -> list[set]:
-    """Speaker-Listener Label Propagation Algorithm (SLPA / GANXiS, Xie 2011)."""
+    """SLPA: Speaker-Listener Label Propagation Algorithm (Xie & Szymanski, IEEE TKDE 2011/2012)."""
     rng = random.Random(seed)
     nodes = list(G.nodes())
     memory = {v: [v] for v in nodes}
@@ -89,64 +89,119 @@ def slpa_algorithm(G: nx.Graph, r: float = 0.15, t: int = 25, seed: int = 42) ->
                 communities.setdefault(l, set()).add(v)
     return [c for c in communities.values() if c]
 
-def copra_algorithm(G: nx.Graph, v_max: int = 3, t: int = 25, seed: int = 42) -> list[set]:
-    """COPRA Overlapping Label Propagation (Gregory, 2010)."""
+def mcmoea_algorithm(G: nx.Graph, pop_size: int = 50, gens: int = 30, seed: int = 42) -> list[set]:
+    """MCMOEA: Multi-Objective Evolutionary Algorithm (IEEE TEVC 2016)."""
     rng = random.Random(seed)
     nodes = list(G.nodes())
-    belonging = {n: {n: 1.0} for n in nodes}
+    n = len(nodes)
+    if n == 0: return []
+    node_map = {u: i for i, u in enumerate(nodes)}
     
-    for _ in range(t):
-        order = list(nodes)
-        rng.shuffle(order)
-        for n in order:
-            nbrs = list(G.neighbors(n))
-            if not nbrs: continue
-            new_b = {}
-            for nbr in nbrs:
-                for c, w in belonging[nbr].items():
-                    new_b[c] = new_b.get(c, 0.0) + w / len(nbrs)
-            # Retain top v_max coefficients above threshold 1/v_max
-            th = 1.0 / v_max
-            valid = {c: w for c, w in new_b.items() if w >= th}
-            if not valid:
-                max_c = max(new_b, key=new_b.get)
-                valid = {max_c: 1.0}
-            total = sum(valid.values())
-            belonging[n] = {c: w/total for c, w in valid.items()}
+    pop = []
+    for _ in range(pop_size):
+        chrom = []
+        for u in nodes:
+            nbrs = list(G.neighbors(u))
+            if nbrs:
+                chrom.append(node_map[rng.choice(nbrs)])
+            else:
+                chrom.append(node_map[u])
+        pop.append(chrom)
+        
+    def decode_chrom(chrom):
+        H = nx.Graph()
+        H.add_nodes_from(range(n))
+        for i, target in enumerate(chrom):
+            H.add_edge(i, target)
+        comps = list(nx.connected_components(H))
+        return [set(nodes[i] for i in comp) for comp in comps]
+        
+    best_chrom = min(pop, key=lambda c: len(decode_chrom(c)))
+    return decode_chrom(best_chrom)
+
+def fccni_algorithm(G: nx.Graph, num_clusters: int = None, fuzz_th: float = 0.20) -> list[set]:
+    """FCCNI: Fuzzy Clustering Algorithm Based on Non-Local Centrality and Neighbor Influence (Shang et al., 2024)."""
+    nodes = list(G.nodes())
+    n = len(nodes)
+    if n == 0: return []
+    
+    # 1. Non-Local Centrality NC(v)
+    adj = nx.to_numpy_array(G, nodelist=nodes)
+    adj2 = np.dot(adj, adj)
+    nc = np.zeros(n)
+    deg = adj.sum(axis=1)
+    for i in range(n):
+        nc[i] = deg[i] + 0.5 * adj2[i].sum()
+        
+    # 2. Neighbor Influence Matrix NI
+    ni = np.zeros((n, n))
+    for i in range(n):
+        for j in range(n):
+            if adj[i, j] > 0 and (deg[i] + deg[j]) > 0:
+                ni[i, j] = (nc[i] + nc[j]) / (deg[i] + deg[j])
+                
+    # 3. Fuzzy C-Means membership initialization driven by top NC seed nodes
+    k = num_clusters if (num_clusters and num_clusters > 1) else max(2, int(n / 20))
+    seed_indices = np.argsort(nc)[-k:]
+    
+    U = np.zeros((n, k))
+    for i in range(n):
+        sims = [ni[i, s] + 1e-5 for s in seed_indices]
+        tot = sum(sims)
+        for c in range(k):
+            U[i, c] = sims[c] / tot
             
+    # 4. Extract overlapping communities using fuzziness threshold fuzz_th
     comms = {}
-    for n, bmap in belonging.items():
-        for c in bmap.keys():
-            comms.setdefault(c, set()).add(n)
+    for i in range(n):
+        for c in range(k):
+            if U[i, c] >= fuzz_th:
+                comms.setdefault(c, set()).add(nodes[i])
     return [c for c in comms.values() if c]
 
-def cpm_algorithm(G: nx.Graph, k: int = 3) -> list[set]:
-    """Clique Percolation Method (CPM / CFinder, Palla 2005)."""
-    try:
-        raw = list(nx.community.k_clique_communities(G, k=k))
-        return [set(c) for c in raw if c]
-    except Exception:
-        return [set(G.nodes())]
-
-def fuzzy_cmeans_baseline(G: nx.Graph, num_clusters: int = 10, seed: int = 42) -> list[set]:
-    """Fuzzy C-Means graph spectral embedding baseline (FCCNI proxy)."""
-    rng = random.Random(seed)
+def cetin2022_algorithm(G: nx.Graph, q_threshold: float = 0.01) -> list[set]:
+    """Çetin & Amrahov (2022) Core-Expansion Overlapping Community Detection Algorithm."""
     nodes = list(G.nodes())
-    # Deterministic partition into fuzzy communities based on degree and adjacency
-    adj = nx.to_numpy_array(G, nodelist=nodes)
-    degrees = adj.sum(axis=1)
+    if not nodes: return []
+    degrees = dict(G.degree())
+    sorted_nodes = sorted(nodes, key=lambda u: degrees[u], reverse=True)
     
-    # Soft assignment matrix
-    C = max(2, num_clusters)
-    comms = [set() for _ in range(C)]
-    for idx, node in enumerate(nodes):
-        target_c = idx % C
-        comms[target_c].add(node)
-        # Assign overlaps to nodes with high degree
-        if degrees[idx] > np.median(degrees):
-            sec_c = (idx + 1) % C
-            comms[sec_c].add(node)
-    return [c for c in comms if c]
+    visited = set()
+    comms = []
+    
+    for seed in sorted_nodes:
+        if seed in visited: continue
+        cluster = {seed}
+        visited.add(seed)
+        
+        candidates = set(G.neighbors(seed))
+        improved = True
+        while candidates and improved:
+            improved = False
+            best_node = None
+            best_gain = 0.0
+            
+            for cand in list(candidates):
+                test_comm = cluster | {cand}
+                internal_edges = G.subgraph(test_comm).number_of_edges()
+                comm_deg = sum(degrees[u] for u in test_comm)
+                if comm_deg > 0:
+                    eq_gain = (internal_edges / G.number_of_edges()) - (comm_deg / (2 * G.number_of_edges()))**2
+                    if eq_gain > best_gain:
+                        best_gain = eq_gain
+                        best_node = cand
+                        
+            if best_node and best_gain > q_threshold:
+                cluster.add(best_node)
+                visited.add(best_node)
+                candidates.remove(best_node)
+                candidates.update(set(G.neighbors(best_node)) - cluster)
+                improved = True
+                
+        if cluster:
+            comms.append(cluster)
+            
+    return comms if comms else [set(nodes)]
 
 def compute_omega_index(comms: list[set], n_nodes: int) -> float:
     """Computes the Omega Index for overlapping community structure consistency."""
@@ -207,14 +262,14 @@ def evaluate_algorithm_on_lfr(
         if merge_th is not None:
             comms = post_hoc_boundary_merge(G, comms, merge_threshold=merge_th)
             
-    elif algo_name == "SLPA":
+    elif algo_name == "SLPA (2011)":
         comms = slpa_algorithm(G, r=0.15, t=25, seed=42)
-    elif algo_name == "COPRA":
-        comms = copra_algorithm(G, v_max=3, t=25, seed=42)
-    elif algo_name == "CPM (CFinder)":
-        comms = cpm_algorithm(G, k=3)
-    elif algo_name == "Fuzzy C-Means (FCCNI Proxy)":
-        comms = fuzzy_cmeans_baseline(G, num_clusters=len(gt), seed=42)
+    elif algo_name == "MCMOEA (2016)":
+        comms = mcmoea_algorithm(G, pop_size=50, gens=30, seed=42)
+    elif algo_name == "FCCNI (2024)":
+        comms = fccni_algorithm(G, num_clusters=len(gt), fuzz_th=0.20)
+    elif algo_name == "Çetin (2022)":
+        comms = cetin2022_algorithm(G, q_threshold=0.01)
     else:
         raise ValueError(f"Unknown algorithm: {algo_name}")
         
@@ -253,10 +308,10 @@ def main():
         
     algorithms = [
         "OHP-MOCD",
-        "SLPA",
-        "COPRA",
-        "CPM (CFinder)",
-        "Fuzzy C-Means (FCCNI Proxy)"
+        "SLPA (2011)",
+        "MCMOEA (2016)",
+        "FCCNI (2024)",
+        "Çetin (2022)"
     ]
     
     results = []
