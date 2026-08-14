@@ -53,8 +53,6 @@ def main():
         t0 = time.perf_counter()
         dict_res = pymocd.ohpmocd(
             H,
-            pop_size=150,
-            num_gens=150,
             init_strategy=strat,
             init_overlap_prob=p_init,
             overlap_support_threshold=supp_th,
