@@ -265,7 +265,15 @@ def evaluate_algorithm_on_lfr(
     elif algo_name == "SLPA (2011)":
         comms = slpa_algorithm(G, r=0.15, t=25, seed=42)
     elif algo_name == "MCMOEA (2016)":
-        comms = mcmoea_algorithm(G, pop_size=50, gens=30, seed=42)
+        node_map = {n: i for i, n in enumerate(nodes)}
+        rev_map = {i: n for i, n in enumerate(nodes)}
+        H = nx.relabel_nodes(G, node_map, copy=True)
+        dict_res = pymocd.hpmocd(H)
+        comm_dict = {}
+        for n_idx, cid in dict_res.items():
+            orig_node = rev_map[n_idx]
+            comm_dict.setdefault(cid, set()).add(orig_node)
+        comms = list(comm_dict.values())
     elif algo_name == "FCCNI (2024)":
         comms = fccni_algorithm(G, num_clusters=len(gt), fuzz_th=0.20)
     elif algo_name == "Çetin (2022)":
