@@ -275,8 +275,8 @@ def evaluate_algorithm_on_lfr(
         
     dur = time.perf_counter() - t0
     
-    comm_frozensets = [frozenset(c) for c in comms]
-    gnmi_val = onmi(comm_frozensets, gt)
+    comm_frozensets = [frozenset(c) for c in comms if c]
+    gnmi_val = onmi(comm_frozensets, gt) if (comm_frozensets and gt) else 0.0
     omega_val = compute_omega_index(comms, n_nodes)
     eq_val = shen_modularity_eq(G, comms)
     qov_val = nicosia_qov_slpa_scaled(G, comms)
