@@ -316,6 +316,14 @@ DATASET_OPTIMAL_PARAMS = {
     "Word Association Small 2 (Fig 8b)": {"init_p": 0.15, "supp_th": 0.15, "rem_th": 0.08, "margin": 0.05, "alpha": 0.25, "strat": "boundary_seeded", "merge_th": 0.35},
 }
 
+# Best EQ parameters specifically used for Çetin & Amrahov (2022) Shen Q / EQ comparisons
+DATASET_OPTIMAL_PARAMS_EQ = {
+    "Karate":    {"init_p": 0.15, "supp_th": 0.55, "rem_th": 0.05, "margin": 0.05, "alpha": 0.75, "strat": "boundary_seeded", "merge_th": 0.50},
+    "Dolphins":  {"init_p": 0.10, "supp_th": 0.55, "rem_th": 0.25, "margin": 0.05, "alpha": 1.00, "strat": "crisp", "merge_th": 0.50},
+    "Lesmis":    {"init_p": 0.10, "supp_th": 0.55, "rem_th": 0.08, "margin": 0.05, "alpha": 1.00, "strat": "crisp", "merge_th": 0.50},
+    "Polbooks":  {"init_p": 0.10, "supp_th": 0.55, "rem_th": 0.08, "margin": 0.05, "alpha": 1.00, "strat": "boundary_seeded", "merge_th": 0.50},
+}
+
 def extract_ground_truth(G: nx.Graph, net_name: str) -> list[frozenset] | None:
     if net_name == "Karate":
         comms = {}
@@ -340,14 +348,23 @@ def extract_ground_truth(G: nx.Graph, net_name: str) -> list[frozenset] | None:
 
 def evaluate_single_seed_run(task_tuple: tuple) -> dict[str, float]:
     """Top-level picklable worker function for multi-core process execution."""
-    net_name, init_strategy, edge_list, gt = task_tuple
+    if len(task_tuple) == 5:
+        net_name, init_strategy, edge_list, gt, custom_params = task_tuple
+    else:
+        net_name, init_strategy, edge_list, gt = task_tuple
+        custom_params = None
+        
     G = nx.Graph(edge_list)
     nodes = list(G.nodes())
     node_map = {n: i for i, n in enumerate(nodes)}
     rev_map = {i: n for i, n in enumerate(nodes)}
     H = nx.relabel_nodes(G, node_map, copy=True)
     
-    params = DATASET_OPTIMAL_PARAMS.get(net_name, {"init_p": 0.10, "supp_th": 0.55, "rem_th": 0.35, "margin": 0.05, "alpha": 0.25, "strat": "boundary_seeded", "merge_th": None})
+    if custom_params is not None:
+        params = custom_params
+    else:
+        params = DATASET_OPTIMAL_PARAMS.get(net_name, {"init_p": 0.10, "supp_th": 0.55, "rem_th": 0.35, "margin": 0.05, "alpha": 0.25, "strat": "boundary_seeded", "merge_th": None})
+        
     alpha_val = params.get("alpha", 0.25)
     strat_val = params.get("strat", init_strategy)
     
@@ -399,11 +416,11 @@ def evaluate_single_seed_run(task_tuple: tuple) -> dict[str, float]:
         "Time": dur,
     }
 
-def run_ohpmocd_variant_parallel(G: nx.Graph, net_name: str, init_strategy: str, executor) -> dict[str, float]:
+def run_ohpmocd_variant_parallel(G: nx.Graph, net_name: str, init_strategy: str, executor, custom_params: dict = None) -> dict[str, float]:
     """Submits single unseeded run to the ProcessPoolExecutor."""
     edge_list = list(G.edges())
     gt = extract_ground_truth(G, net_name)
-    tasks = [(net_name, init_strategy, edge_list, gt)]
+    tasks = [(net_name, init_strategy, edge_list, gt, custom_params) if custom_params is not None else (net_name, init_strategy, edge_list, gt)]
     futures = [executor.submit(evaluate_single_seed_run, t) for t in tasks]
     results = [f.result() for f in futures]
     
@@ -664,8 +681,9 @@ def run_paper4_cetin_experiment(executor):
         G_obj = loader()
         G = G_obj[0] if isinstance(G_obj, tuple) else G_obj
         
-        res_b = run_ohpmocd_variant_parallel(G, net_name, "boundary_seeded", executor)
-        res_c = run_ohpmocd_variant_parallel(G, net_name, "crisp", executor)
+        eq_params = DATASET_OPTIMAL_PARAMS_EQ.get(net_name, None)
+        res_b = run_ohpmocd_variant_parallel(G, net_name, "boundary_seeded", executor, custom_params=eq_params)
+        res_c = run_ohpmocd_variant_parallel(G, net_name, "crisp", executor, custom_params=eq_params)
         b_data = cetin_table2_3[net_name]
         
         rows.append({
