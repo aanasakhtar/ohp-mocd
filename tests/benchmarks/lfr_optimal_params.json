@@ -1,0 +1,42 @@
+{
+  "LFR_Small_Sparse": {
+    "gNMI_optimal": {
+      "strat": "boundary_seeded",
+      "alpha": 1.0,
+      "supp_th": 0.35,
+      "rem_th": 0.05,
+      "margin": 0.05,
+      "merge_th": null,
+      "best_gNMI": 1.0000
+    },
+    "EQ_optimal": {
+      "strat": "boundary_seeded",
+      "alpha": 1.0,
+      "supp_th": 0.35,
+      "rem_th": 0.05,
+      "margin": 0.05,
+      "merge_th": null,
+      "best_EQ": 0.6740
+    }
+  },
+  "LFR_Medium_Standard": {
+    "gNMI_optimal": {
+      "strat": "boundary_seeded",
+      "alpha": 0.0,
+      "supp_th": 0.55,
+      "rem_th": 0.05,
+      "margin": 0.05,
+      "merge_th": null,
+      "best_gNMI": 0.9937
+    },
+    "EQ_optimal": {
+      "strat": "boundary_seeded",
+      "alpha": 1.0,
+      "supp_th": 0.35,
+      "rem_th": 0.05,
+      "margin": 0.05,
+      "merge_th": null,
+      "best_EQ": 0.6383
+    }
+  }
+}

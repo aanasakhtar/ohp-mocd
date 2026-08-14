@@ -156,12 +156,22 @@ def main():
     print("=================================================================\n")
     
     all_results = []
+    json_out = BENCH_DIR / "lfr_optimal_params.json"
     optimal_params = {}
+    
+    if json_out.exists():
+        with open(json_out, "r") as f:
+            optimal_params = json.load(f)
+        print(f"Loaded existing results for {list(optimal_params.keys())} from {json_out}\n")
     
     max_workers = max(1, (os.cpu_count() or 4) - 1)
     print(f"Parallel Execution active with max_workers = {max_workers}\n")
     
     for cfg_name, cfg_params in LFR_CONFIGS.items():
+        if cfg_name in optimal_params:
+            print(f"--- Skipping LFR Network: {cfg_name} (already recorded in lfr_optimal_params.json) ---\n")
+            continue
+            
         print(f"--- Generating LFR Network: {cfg_name} ---")
         t_gen = time.perf_counter()
         G, gt = generate_lfr_network(cfg_params)
@@ -222,15 +232,16 @@ def main():
             }
         }
         
+        # Save progress after each configuration finishes
+        with open(json_out, "w") as f:
+            json.dump(optimal_params, f, indent=4)
+            
     df_all = pd.DataFrame(all_results)
     csv_out = BENCH_DIR / "lfr_grid_search_full_results.csv"
     df_all.to_csv(csv_out, index=False)
     print(f"Saved full grid search results to: {csv_out}")
-    
-    json_out = BENCH_DIR / "lfr_optimal_params.json"
-    with open(json_out, "w") as f:
-        json.dump(optimal_params, f, indent=4)
-    print(f"Saved optimal parameters to: {json_out}\n")
+    print(f"Saved complete optimal parameters to: {json_out}\n")
+    print("ALL LFR GRID SEARCH TUNING COMPLETED SUCCESSFULLY.")
     print("ALL LFR GRID SEARCH TUNING COMPLETED SUCCESSFULLY.")
 
 if __name__ == "__main__":
