@@ -311,7 +311,7 @@ DATASET_OPTIMAL_PARAMS = {
     "Netscience": {"init_p": 0.15, "supp_th": 0.55, "rem_th": 0.05, "margin": 0.05, "alpha": 0.00, "strat": "crisp", "merge_th": 0.35},
     "Scientific Collaborators (Netscience)": {"init_p": 0.15, "supp_th": 0.55, "rem_th": 0.05, "margin": 0.05, "alpha": 0.00, "strat": "crisp", "merge_th": 0.35},
     "Celegans":  {"init_p": 0.10, "supp_th": 0.55, "rem_th": 0.25, "margin": 0.05, "alpha": 1.00, "strat": "crisp", "merge_th": 0.50},
-    "Email":     {"init_p": 0.15, "supp_th": 0.35, "rem_th": 0.25, "margin": 0.05, "alpha": 0.00, "strat": "crisp", "merge_th": None},
+    "Email":     {"init_p": 0.15, "supp_th": 0.25, "rem_th": 0.08, "margin": 0.05, "alpha": 0.00, "strat": "boundary_seeded", "merge_th": 0.35},
     "Word Association Small 1 (Fig 8a)": {"init_p": 0.15, "supp_th": 0.15, "rem_th": 0.08, "margin": 0.05, "alpha": 0.25, "strat": "boundary_seeded", "merge_th": 0.35},
     "Word Association Small 2 (Fig 8b)": {"init_p": 0.15, "supp_th": 0.15, "rem_th": 0.08, "margin": 0.05, "alpha": 0.25, "strat": "boundary_seeded", "merge_th": 0.35},
 }
