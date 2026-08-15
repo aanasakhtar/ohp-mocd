@@ -159,106 +159,7 @@ def overlapping_coverage_cetin(G: nx.Graph, communities: list[set]) -> float:
             intra_edges += 1
     return float(intra_edges / m)
 
-def post_hoc_boundary_merge(G: nx.Graph, communities: list[set], merge_threshold: float | str | None = 0.50) -> list[set]:
-    """Fast, optimized post-hoc boundary modularity merge operator.
-    Supports parameter-free automatic peak modularity merge when merge_threshold is 'auto', None, or 0.0.
-    Uses O(m) inter-community edge precomputation and incremental O(1) ΔQ gain updates.
-    """
-    if not communities or len(communities) <= 1:
-        return communities
-    m = G.number_of_edges()
-    if m == 0:
-        return communities
-    
-    two_m = 2.0 * m
-    two_m_sq = two_m * two_m
-    deg = dict(G.degree())
-    
-    # Filter empty communities and assign integer IDs
-    comm_sets = {i: set(c) for i, c in enumerate(communities) if c}
-    if len(comm_sets) <= 1:
-        return list(comm_sets.values())
-        
-    # Map node -> list of community IDs it belongs to
-    node_to_comms = collections.defaultdict(list)
-    for cid, cset in comm_sets.items():
-        for u in cset:
-            node_to_comms[u].append(cid)
-            
-    # Precompute inter-community edge counts: inter_edges[c1][c2]
-    inter_edges = collections.defaultdict(lambda: collections.defaultdict(int))
-    for u, v in G.edges():
-        u_comms = node_to_comms.get(u, [])
-        v_comms = node_to_comms.get(v, [])
-        for c1 in u_comms:
-            for c2 in v_comms:
-                if c1 != c2:
-                    inter_edges[c1][c2] += 1
-                    inter_edges[c2][c1] += 1
-
-    # Precompute total degree per community: sum(deg[u] for u in C)
-    comm_degs = {cid: sum(deg.get(u, 0) for u in cset) for cid, cset in comm_sets.items()}
-    
-    is_auto = (merge_threshold == 'auto' or merge_threshold is None or merge_threshold == 0.0)
-    thresh_val = 0.0 if is_auto else float(merge_threshold)
-
-    while len(comm_sets) > 1:
-        best_pair = None
-        best_gain = 0.0
-        
-        # Scan only existing adjacent community pairs
-        for c1, neighbors in list(inter_edges.items()):
-            deg_c1 = comm_degs[c1]
-            size_c1 = len(comm_sets[c1])
-            
-            for c2, e_inter in list(neighbors.items()):
-                if c2 <= c1 or c2 not in comm_sets:
-                    continue  # check each pair once
-                
-                deg_c2 = comm_degs[c2]
-                delta_q = (2.0 * e_inter / two_m) - (2.0 * deg_c1 * deg_c2 / two_m_sq)
-                
-                if delta_q > 0.0:
-                    if not is_auto:
-                        size_c2 = len(comm_sets[c2])
-                        min_size = min(size_c1, size_c2)
-                        bound_ratio = e_inter / min_size if min_size > 0 else 0.0
-                        if bound_ratio < thresh_val:
-                            continue
-                    
-                    if delta_q > best_gain:
-                        best_gain = delta_q
-                        best_pair = (c1, c2)
-                        
-        if best_pair is None or best_gain <= 0.0:
-            break
-            
-        c1, c2 = best_pair
-        
-        # Merge c2 into c1
-        comm_sets[c1] |= comm_sets[c2]
-        comm_degs[c1] = sum(deg.get(u, 0) for u in comm_sets[c1])
-        
-        # Update inter-community edge counts
-        c2_neighbors = dict(inter_edges[c2])
-        for k, w in c2_neighbors.items():
-            if k == c1:
-                continue
-            inter_edges[c1][k] += w
-            inter_edges[k][c1] += w
-            if c2 in inter_edges[k]:
-                del inter_edges[k][c2]
-                
-        if c2 in inter_edges[c1]:
-            del inter_edges[c1][c2]
-        if c1 in inter_edges[c2]:
-            del inter_edges[c2][c1]
-            
-        del inter_edges[c2]
-        del comm_sets[c2]
-        del comm_degs[c2]
-
-    return list(comm_sets.values())
+from tests.benchmarks.utils.merge import post_hoc_boundary_merge
 
 # -----------------------------------------------------------------------------
 # Dataset Loaders
@@ -409,11 +310,11 @@ def extract_ground_truth(G: nx.Graph, net_name: str) -> list[frozenset] | None:
     return None
 
 def evaluate_single_seed_run(task_tuple: tuple) -> dict[str, float]:
-    """Top-level picklable worker function running 3 independent trials for peak stability."""
-    if len(task_tuple) == 5:
-        net_name, init_strategy, edge_list, gt, custom_params = task_tuple
+    """Top-level picklable worker function running a single unseeded trial."""
+    if len(task_tuple) == 6:
+        net_name, init_strategy, edge_list, gt, custom_params, seed_val = task_tuple
     else:
-        net_name, init_strategy, edge_list, gt = task_tuple
+        net_name, init_strategy, edge_list, gt, seed_val = task_tuple
         custom_params = None
         
     G = nx.Graph(edge_list)
@@ -430,73 +331,64 @@ def evaluate_single_seed_run(task_tuple: tuple) -> dict[str, float]:
     alpha_val = params.get("alpha", 0.25)
     strat_val = params.get("strat", init_strategy)
     
-    trials = []
-    num_trials = 3
+    t0 = time.perf_counter()
+    dict_res = pymocd.ohpmocd(
+        H,
+        init_strategy=strat_val,
+        init_overlap_prob=params["init_p"],
+        overlap_support_threshold=params["supp_th"],
+        overlap_removal_threshold=params["rem_th"],
+        switch_margin=params["margin"],
+        alpha=alpha_val,
+        seed=seed_val
+    )
+    dur = time.perf_counter() - t0
     
-    for trial_idx in range(num_trials):
-        t0 = time.perf_counter()
-        dict_res = pymocd.ohpmocd(
-            H,
-            init_strategy=strat_val,
-            init_overlap_prob=params["init_p"],
-            overlap_support_threshold=params["supp_th"],
-            overlap_removal_threshold=params["rem_th"],
-            switch_margin=params["margin"],
-            alpha=alpha_val,
-            seed=None
-        )
-        dur = time.perf_counter() - t0
+    comm_dict = {}
+    for n_idx, comm_list in dict_res.items():
+        orig_node = rev_map[n_idx]
+        if isinstance(comm_list, (int, np.integer)):
+            comm_list = [comm_list]
+        for cid in comm_list:
+            comm_dict.setdefault(cid, set()).add(orig_node)
+    comms = list(comm_dict.values())
+    
+    merge_th = params.get("merge_th", None)
+    if merge_th is not None:
+        comms = post_hoc_boundary_merge(G, comms, merge_threshold=merge_th)
+    
+    qov = nicosia_qov(G, comms)
+    qov_slpa = nicosia_qov_slpa_scaled(G, comms)
+    eq = shen_modularity_eq(G, comms)
+    cov = overlapping_coverage_cetin(G, comms)
+    
+    onmi_val = 0.0
+    if gt is not None:
+        comm_frozensets = [frozenset(c) for c in comms]
+        onmi_val = onmi(comm_frozensets, gt)
         
-        comm_dict = {}
-        for n_idx, comm_list in dict_res.items():
-            orig_node = rev_map[n_idx]
-            if isinstance(comm_list, (int, np.integer)):
-                comm_list = [comm_list]
-            for cid in comm_list:
-                comm_dict.setdefault(cid, set()).add(orig_node)
-        comms = list(comm_dict.values())
-        
-        merge_th = params.get("merge_th", None)
-        if merge_th is not None:
-            comms = post_hoc_boundary_merge(G, comms, merge_threshold=merge_th)
-        
-        qov = nicosia_qov(G, comms)
-        qov_slpa = nicosia_qov_slpa_scaled(G, comms)
-        eq = shen_modularity_eq(G, comms)
-        cov = overlapping_coverage_cetin(G, comms)
-        
-        onmi_val = 0.0
-        if gt is not None:
-            comm_frozensets = [frozenset(c) for c in comms]
-            onmi_val = onmi(comm_frozensets, gt)
-            
-        trials.append({
-            "Qov": qov,
-            "Qov_SLPA": qov_slpa,
-            "EQ": eq,
-            "Coverage": cov,
-            "ONMI": onmi_val,
-            "Time": dur,
-        })
-        
-    # Return best trial by max Qov_SLPA (and max ONMI/EQ)
-    best_trial = max(trials, key=lambda t: (t["Qov_SLPA"], t["EQ"], t["ONMI"]))
     return {
         "net_name": net_name,
         "init_strategy": init_strategy,
-        "Qov": best_trial["Qov"],
-        "Qov_SLPA": best_trial["Qov_SLPA"],
-        "EQ": best_trial["EQ"],
-        "Coverage": best_trial["Coverage"],
-        "ONMI": best_trial["ONMI"],
-        "Time": sum(t["Time"] for t in trials) / len(trials),
+        "Qov": qov,
+        "Qov_SLPA": qov_slpa,
+        "EQ": eq,
+        "Coverage": cov,
+        "ONMI": onmi_val,
+        "Time": dur,
     }
 
-def run_ohpmocd_variant_parallel(G: nx.Graph, net_name: str, init_strategy: str, executor, custom_params: dict = None) -> dict[str, float]:
-    """Submits single unseeded run to the ProcessPoolExecutor."""
+def run_ohpmocd_variant_parallel(G: nx.Graph, net_name: str, init_strategy: str, executor, custom_params: dict = None, num_trials: int = 15) -> dict[str, float]:
+    """Submits N=15 unseeded trial tasks in parallel to compute true mean, std, and peak metrics."""
     edge_list = list(G.edges())
     gt = extract_ground_truth(G, net_name)
-    tasks = [(net_name, init_strategy, edge_list, gt, custom_params) if custom_params is not None else (net_name, init_strategy, edge_list, gt)]
+    
+    tasks = [
+        (net_name, init_strategy, edge_list, gt, custom_params, seed_val)
+        if custom_params is not None
+        else (net_name, init_strategy, edge_list, gt, seed_val)
+        for seed_val in range(42, 42 + num_trials)
+    ]
     futures = [executor.submit(evaluate_single_seed_run, t) for t in tasks]
     results = [f.result() for f in futures]
     
@@ -508,17 +400,28 @@ def run_ohpmocd_variant_parallel(G: nx.Graph, net_name: str, init_strategy: str,
     times = [r["Time"] for r in results]
     
     return {
-        "Qov_mean": float(np.max(qovs)),
+        "Qov_mean": float(np.mean(qovs)),
         "Qov_std": float(np.std(qovs)),
-        "Qov_SLPA_mean": float(np.max(qov_slpas)),
+        "Qov_peak": float(np.max(qovs)),
+        
+        "Qov_SLPA_mean": float(np.mean(qov_slpas)),
         "Qov_SLPA_std": float(np.std(qov_slpas)),
-        "EQ_mean": float(np.max(eqs)),
+        "Qov_SLPA_peak": float(np.max(qov_slpas)),
+        
+        "EQ_mean": float(np.mean(eqs)),
         "EQ_std": float(np.std(eqs)),
-        "Coverage_mean": float(np.max(covs)),
+        "EQ_peak": float(np.max(eqs)),
+        
+        "Coverage_mean": float(np.mean(covs)),
         "Coverage_std": float(np.std(covs)),
-        "ONMI_mean": float(np.max(onmis)),
+        "Coverage_peak": float(np.max(covs)),
+        
+        "ONMI_mean": float(np.mean(onmis)),
         "ONMI_std": float(np.std(onmis)),
+        "ONMI_peak": float(np.max(onmis)),
+        
         "Time_mean": float(np.mean(times)),
+        "Time_std": float(np.std(times)),
     }
 
 # -----------------------------------------------------------------------------

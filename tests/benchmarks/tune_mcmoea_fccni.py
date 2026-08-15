@@ -18,10 +18,11 @@ import pymocd
 REPO_ROOT = Path(__file__).resolve().parent.parent.parent
 BENCH_DIR = REPO_ROOT / "tests" / "benchmarks"
 
+from tests.benchmarks.utils.merge import post_hoc_boundary_merge
 from tests.benchmarks.run_paper_comparative_suite import (
     load_karate, load_dolphins, load_lesmis, load_polbooks, load_football,
     extract_ground_truth, nicosia_qov, nicosia_qov_slpa_scaled, shen_modularity_eq,
-    post_hoc_boundary_merge, onmi
+    onmi
 )
 
 def evaluate_param_tuple(task: tuple) -> tuple:
@@ -62,6 +63,8 @@ def evaluate_param_tuple(task: tuple) -> tuple:
             val = shen_modularity_eq(G, comms)
         trials.append(val)
         
+    mean_val = float(np.mean(trials))
+    std_val = float(np.std(trials))
     peak_val = float(np.max(trials))
     params = {
         "init_p": init_p,
@@ -71,9 +74,11 @@ def evaluate_param_tuple(task: tuple) -> tuple:
         "alpha": alpha,
         "strat": strat,
         "merge_th": "auto",
+        "mean_score": mean_val,
+        "std_score": std_val,
         "peak_score": peak_val
     }
-    return (net_name, metric_type, peak_val, params)
+    return (net_name, metric_type, mean_val, params)
 
 def tune_dataset_parallel(net_name: str, G: nx.Graph, gt: list[frozenset] = None, metric_type: str = "gNMI"):
     print(f"\n=================================================================", flush=True)
