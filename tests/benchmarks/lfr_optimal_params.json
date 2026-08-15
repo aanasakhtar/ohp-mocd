@@ -38,5 +38,25 @@
       "merge_th": null,
       "best_EQ": 0.6383
     }
+  },
+  "LFR_Large_Overlap": {
+    "gNMI_optimal": {
+      "strat": "boundary_seeded",
+      "alpha": 0.75,
+      "supp_th": 0.35,
+      "rem_th": 0.25,
+      "margin": 0.05,
+      "merge_th": null,
+      "best_gNMI": 0.9536
+    },
+    "EQ_optimal": {
+      "strat": "boundary_seeded",
+      "alpha": 0.75,
+      "supp_th": 0.35,
+      "rem_th": 0.05,
+      "margin": 0.05,
+      "merge_th": 0.35,
+      "best_EQ": 0.5221
+    }
   }
 }
