@@ -23,6 +23,7 @@ import zipfile
 import io
 import urllib.request
 import re
+import collections
 import numpy as np
 import pandas as pd
 import networkx as nx
@@ -158,45 +159,106 @@ def overlapping_coverage_cetin(G: nx.Graph, communities: list[set]) -> float:
             intra_edges += 1
     return float(intra_edges / m)
 
-def post_hoc_boundary_merge(G: nx.Graph, communities: list[set], merge_threshold: float = 0.50) -> list[set]:
-    """Post-hoc inter-community boundary ratio merge operator (Strategy 2 Roadmap).
-    Merges highly interconnected micro-communities that share positive modularity gain (Delta Q > 0)
-    and high inter-community boundary ratio (>= merge_threshold), collapsing over-fragmented micro-clusters.
+def post_hoc_boundary_merge(G: nx.Graph, communities: list[set], merge_threshold: float | str | None = 0.50) -> list[set]:
+    """Fast, optimized post-hoc boundary modularity merge operator.
+    Supports parameter-free automatic peak modularity merge when merge_threshold is 'auto', None, or 0.0.
+    Uses O(m) inter-community edge precomputation and incremental O(1) ΔQ gain updates.
     """
-    if len(communities) <= 1:
+    if not communities or len(communities) <= 1:
         return communities
     m = G.number_of_edges()
     if m == 0:
         return communities
+    
     two_m = 2.0 * m
+    two_m_sq = two_m * two_m
     deg = dict(G.degree())
-    merged_comms = [set(c) for c in communities if c]
-    changed = True
-    while changed and len(merged_comms) > 1:
-        changed = False
+    
+    # Filter empty communities and assign integer IDs
+    comm_sets = {i: set(c) for i, c in enumerate(communities) if c}
+    if len(comm_sets) <= 1:
+        return list(comm_sets.values())
+        
+    # Map node -> list of community IDs it belongs to
+    node_to_comms = collections.defaultdict(list)
+    for cid, cset in comm_sets.items():
+        for u in cset:
+            node_to_comms[u].append(cid)
+            
+    # Precompute inter-community edge counts: inter_edges[c1][c2]
+    inter_edges = collections.defaultdict(lambda: collections.defaultdict(int))
+    for u, v in G.edges():
+        u_comms = node_to_comms.get(u, [])
+        v_comms = node_to_comms.get(v, [])
+        for c1 in u_comms:
+            for c2 in v_comms:
+                if c1 != c2:
+                    inter_edges[c1][c2] += 1
+                    inter_edges[c2][c1] += 1
+
+    # Precompute total degree per community: sum(deg[u] for u in C)
+    comm_degs = {cid: sum(deg.get(u, 0) for u in cset) for cid, cset in comm_sets.items()}
+    
+    is_auto = (merge_threshold == 'auto' or merge_threshold is None or merge_threshold == 0.0)
+    thresh_val = 0.0 if is_auto else float(merge_threshold)
+
+    while len(comm_sets) > 1:
         best_pair = None
         best_gain = 0.0
-        for i in range(len(merged_comms)):
-            for j in range(i + 1, len(merged_comms)):
-                c1, c2 = merged_comms[i], merged_comms[j]
-                e_inter = sum(1 for u in c1 for v in c2 if G.has_edge(u, v))
-                if e_inter == 0:
-                    continue
-                deg_c1 = sum(deg.get(u, 0) for u in c1)
-                deg_c2 = sum(deg.get(u, 0) for u in c2)
-                delta_q = (2.0 * e_inter / two_m) - (2.0 * deg_c1 * deg_c2 / (two_m * two_m))
-                min_size = min(len(c1), len(c2))
-                bound_ratio = e_inter / min_size if min_size > 0 else 0.0
-                if delta_q > 0.0 and bound_ratio >= merge_threshold:
+        
+        # Scan only existing adjacent community pairs
+        for c1, neighbors in list(inter_edges.items()):
+            deg_c1 = comm_degs[c1]
+            size_c1 = len(comm_sets[c1])
+            
+            for c2, e_inter in list(neighbors.items()):
+                if c2 <= c1 or c2 not in comm_sets:
+                    continue  # check each pair once
+                
+                deg_c2 = comm_degs[c2]
+                delta_q = (2.0 * e_inter / two_m) - (2.0 * deg_c1 * deg_c2 / two_m_sq)
+                
+                if delta_q > 0.0:
+                    if not is_auto:
+                        size_c2 = len(comm_sets[c2])
+                        min_size = min(size_c1, size_c2)
+                        bound_ratio = e_inter / min_size if min_size > 0 else 0.0
+                        if bound_ratio < thresh_val:
+                            continue
+                    
                     if delta_q > best_gain:
                         best_gain = delta_q
-                        best_pair = (i, j)
-        if best_pair is not None:
-            i, j = best_pair
-            merged_comms[i] = merged_comms[i].union(merged_comms[j])
-            merged_comms.pop(j)
-            changed = True
-    return merged_comms
+                        best_pair = (c1, c2)
+                        
+        if best_pair is None or best_gain <= 0.0:
+            break
+            
+        c1, c2 = best_pair
+        
+        # Merge c2 into c1
+        comm_sets[c1] |= comm_sets[c2]
+        comm_degs[c1] = sum(deg.get(u, 0) for u in comm_sets[c1])
+        
+        # Update inter-community edge counts
+        c2_neighbors = dict(inter_edges[c2])
+        for k, w in c2_neighbors.items():
+            if k == c1:
+                continue
+            inter_edges[c1][k] += w
+            inter_edges[k][c1] += w
+            if c2 in inter_edges[k]:
+                del inter_edges[k][c2]
+                
+        if c2 in inter_edges[c1]:
+            del inter_edges[c1][c2]
+        if c1 in inter_edges[c2]:
+            del inter_edges[c2][c1]
+            
+        del inter_edges[c2]
+        del comm_sets[c2]
+        del comm_degs[c2]
+
+    return list(comm_sets.values())
 
 # -----------------------------------------------------------------------------
 # Dataset Loaders
@@ -303,25 +365,25 @@ def load_email() -> nx.Graph:
 # Optimal hyperparameters discovered via grid search with 100% OCCSA-unified operators
 # (operators + objective evaluation both use OCCSA weights).
 DATASET_OPTIMAL_PARAMS = {
-    "Karate":    {"init_p": 0.15, "supp_th": 0.25, "rem_th": 0.05, "margin": 0.05, "alpha": 0.00, "strat": "boundary_seeded", "merge_th": 0.50},
-    "Dolphins":  {"init_p": 0.10, "supp_th": 0.10, "rem_th": 0.05, "margin": 0.05, "alpha": 0.00, "strat": "boundary_seeded", "merge_th": 0.35},
-    "Lesmis":    {"init_p": 0.10, "supp_th": 0.55, "rem_th": 0.08, "margin": 0.05, "alpha": 1.00, "strat": "crisp", "merge_th": 0.50},
-    "Polbooks":  {"init_p": 0.10, "supp_th": 0.25, "rem_th": 0.08, "margin": 0.05, "alpha": 0.50, "strat": "boundary_seeded", "merge_th": 0.50},
-    "Football":  {"init_p": 0.15, "supp_th": 0.55, "rem_th": 0.25, "margin": 0.05, "alpha": 0.00, "strat": "boundary_seeded", "merge_th": None},
-    "Netscience": {"init_p": 0.15, "supp_th": 0.55, "rem_th": 0.05, "margin": 0.05, "alpha": 0.00, "strat": "crisp", "merge_th": 0.35},
-    "Scientific Collaborators (Netscience)": {"init_p": 0.15, "supp_th": 0.55, "rem_th": 0.05, "margin": 0.05, "alpha": 0.00, "strat": "crisp", "merge_th": 0.35},
-    "Celegans":  {"init_p": 0.10, "supp_th": 0.55, "rem_th": 0.25, "margin": 0.05, "alpha": 1.00, "strat": "crisp", "merge_th": 0.50},
-    "Email":     {"init_p": 0.15, "supp_th": 0.25, "rem_th": 0.08, "margin": 0.05, "alpha": 0.00, "strat": "boundary_seeded", "merge_th": 0.35},
-    "Word Association Small 1 (Fig 8a)": {"init_p": 0.15, "supp_th": 0.15, "rem_th": 0.08, "margin": 0.05, "alpha": 0.25, "strat": "boundary_seeded", "merge_th": 0.35},
-    "Word Association Small 2 (Fig 8b)": {"init_p": 0.15, "supp_th": 0.15, "rem_th": 0.08, "margin": 0.05, "alpha": 0.25, "strat": "boundary_seeded", "merge_th": 0.35},
+    "Karate":    {"init_p": 0.10, "supp_th": 0.25, "rem_th": 0.25, "margin": 0.05, "alpha": 0.00, "strat": "boundary_seeded", "merge_th": "auto"},
+    "Dolphins":  {"init_p": 0.10, "supp_th": 0.25, "rem_th": 0.05, "margin": 0.05, "alpha": 0.00, "strat": "boundary_seeded", "merge_th": "auto"},
+    "Lesmis":    {"init_p": 0.10, "supp_th": 0.55, "rem_th": 0.08, "margin": 0.05, "alpha": 1.00, "strat": "crisp", "merge_th": "auto"},
+    "Polbooks":  {"init_p": 0.10, "supp_th": 0.25, "rem_th": 0.25, "margin": 0.05, "alpha": 0.00, "strat": "boundary_seeded", "merge_th": "auto"},
+    "Football":  {"init_p": 0.10, "supp_th": 0.35, "rem_th": 0.05, "margin": 0.05, "alpha": 0.00, "strat": "boundary_seeded", "merge_th": "auto"},
+    "Netscience": {"init_p": 0.15, "supp_th": 0.55, "rem_th": 0.05, "margin": 0.05, "alpha": 0.00, "strat": "crisp", "merge_th": "auto"},
+    "Scientific Collaborators (Netscience)": {"init_p": 0.15, "supp_th": 0.55, "rem_th": 0.05, "margin": 0.05, "alpha": 0.00, "strat": "crisp", "merge_th": "auto"},
+    "Celegans":  {"init_p": 0.10, "supp_th": 0.55, "rem_th": 0.25, "margin": 0.05, "alpha": 1.00, "strat": "crisp", "merge_th": "auto"},
+    "Email":     {"init_p": 0.15, "supp_th": 0.25, "rem_th": 0.08, "margin": 0.05, "alpha": 0.00, "strat": "boundary_seeded", "merge_th": "auto"},
+    "Word Association Small 1 (Fig 8a)": {"init_p": 0.15, "supp_th": 0.15, "rem_th": 0.08, "margin": 0.05, "alpha": 0.25, "strat": "boundary_seeded", "merge_th": "auto"},
+    "Word Association Small 2 (Fig 8b)": {"init_p": 0.15, "supp_th": 0.55, "rem_th": 0.02, "margin": 0.05, "alpha": 0.00, "strat": "boundary_seeded", "merge_th": "auto"},
 }
 
 # Best EQ parameters specifically used for Çetin & Amrahov (2022) Shen Q / EQ comparisons
 DATASET_OPTIMAL_PARAMS_EQ = {
-    "Karate":    {"init_p": 0.15, "supp_th": 0.55, "rem_th": 0.05, "margin": 0.05, "alpha": 0.75, "strat": "boundary_seeded", "merge_th": 0.50},
-    "Dolphins":  {"init_p": 0.10, "supp_th": 0.55, "rem_th": 0.25, "margin": 0.05, "alpha": 1.00, "strat": "crisp", "merge_th": 0.50},
-    "Lesmis":    {"init_p": 0.10, "supp_th": 0.55, "rem_th": 0.08, "margin": 0.05, "alpha": 1.00, "strat": "crisp", "merge_th": 0.50},
-    "Polbooks":  {"init_p": 0.10, "supp_th": 0.55, "rem_th": 0.08, "margin": 0.05, "alpha": 1.00, "strat": "boundary_seeded", "merge_th": 0.50},
+    "Karate":    {"init_p": 0.15, "supp_th": 0.55, "rem_th": 0.05, "margin": 0.05, "alpha": 0.75, "strat": "boundary_seeded", "merge_th": "auto"},
+    "Dolphins":  {"init_p": 0.10, "supp_th": 0.55, "rem_th": 0.25, "margin": 0.05, "alpha": 1.00, "strat": "crisp", "merge_th": "auto"},
+    "Lesmis":    {"init_p": 0.10, "supp_th": 0.55, "rem_th": 0.08, "margin": 0.05, "alpha": 1.00, "strat": "crisp", "merge_th": "auto"},
+    "Polbooks":  {"init_p": 0.10, "supp_th": 0.55, "rem_th": 0.08, "margin": 0.05, "alpha": 1.00, "strat": "boundary_seeded", "merge_th": "auto"},
 }
 
 def extract_ground_truth(G: nx.Graph, net_name: str) -> list[frozenset] | None:

@@ -22,6 +22,7 @@ import zipfile
 import urllib.request
 import itertools
 import concurrent.futures
+import collections
 from pathlib import Path
 import numpy as np
 import networkx as nx
@@ -71,38 +72,99 @@ def shen_modularity_eq(G: nx.Graph, communities: list[set]) -> float:
                 eq += (1.0 / (node_belong[u] * node_belong[v])) * (A_uv - (deg[u] * deg[v] / two_m))
     return float(eq / two_m)
 
-def post_hoc_boundary_merge(G: nx.Graph, communities: list[set], merge_threshold: float = 0.35) -> list[set]:
-    if len(communities) <= 1: return communities
+def post_hoc_boundary_merge(G: nx.Graph, communities: list[set], merge_threshold: float | str | None = 0.35) -> list[set]:
+    """Fast, optimized post-hoc boundary modularity merge operator.
+    Supports parameter-free automatic peak modularity merge when merge_threshold is 'auto', None, or 0.0.
+    Uses O(m) inter-community edge precomputation and incremental O(1) ΔQ gain updates.
+    """
+    if not communities or len(communities) <= 1:
+        return communities
     m = G.number_of_edges()
-    if m == 0: return communities
+    if m == 0:
+        return communities
+    
     two_m = 2.0 * m
+    two_m_sq = two_m * two_m
     deg = dict(G.degree())
-    merged_comms = [set(c) for c in communities if c]
-    changed = True
-    while changed and len(merged_comms) > 1:
-        changed = False
+    
+    comm_sets = {i: set(c) for i, c in enumerate(communities) if c}
+    if len(comm_sets) <= 1:
+        return list(comm_sets.values())
+        
+    node_to_comms = collections.defaultdict(list)
+    for cid, cset in comm_sets.items():
+        for u in cset:
+            node_to_comms[u].append(cid)
+            
+    inter_edges = collections.defaultdict(lambda: collections.defaultdict(int))
+    for u, v in G.edges():
+        u_comms = node_to_comms.get(u, [])
+        v_comms = node_to_comms.get(v, [])
+        for c1 in u_comms:
+            for c2 in v_comms:
+                if c1 != c2:
+                    inter_edges[c1][c2] += 1
+                    inter_edges[c2][c1] += 1
+
+    comm_degs = {cid: sum(deg.get(u, 0) for u in cset) for cid, cset in comm_sets.items()}
+    
+    is_auto = (merge_threshold == 'auto' or merge_threshold is None or merge_threshold == 0.0)
+    thresh_val = 0.0 if is_auto else float(merge_threshold)
+
+    while len(comm_sets) > 1:
         best_pair = None
         best_gain = 0.0
-        for i in range(len(merged_comms)):
-            for j in range(i + 1, len(merged_comms)):
-                c1, c2 = merged_comms[i], merged_comms[j]
-                e_inter = sum(1 for u in c1 for v in c2 if G.has_edge(u, v))
-                if e_inter == 0: continue
-                deg_c1 = sum(deg.get(u, 0) for u in c1)
-                deg_c2 = sum(deg.get(u, 0) for u in c2)
-                delta_q = (2.0 * e_inter / two_m) - (2.0 * deg_c1 * deg_c2 / (two_m * two_m))
-                min_size = min(len(c1), len(c2))
-                bound_ratio = e_inter / min_size if min_size > 0 else 0.0
-                if delta_q > 0.0 and bound_ratio >= merge_threshold:
+        
+        for c1, neighbors in list(inter_edges.items()):
+            deg_c1 = comm_degs[c1]
+            size_c1 = len(comm_sets[c1])
+            
+            for c2, e_inter in list(neighbors.items()):
+                if c2 <= c1 or c2 not in comm_sets:
+                    continue
+                
+                deg_c2 = comm_degs[c2]
+                delta_q = (2.0 * e_inter / two_m) - (2.0 * deg_c1 * deg_c2 / two_m_sq)
+                
+                if delta_q > 0.0:
+                    if not is_auto:
+                        size_c2 = len(comm_sets[c2])
+                        min_size = min(size_c1, size_c2)
+                        bound_ratio = e_inter / min_size if min_size > 0 else 0.0
+                        if bound_ratio < thresh_val:
+                            continue
+                    
                     if delta_q > best_gain:
                         best_gain = delta_q
-                        best_pair = (i, j)
-        if best_pair is not None:
-            i, j = best_pair
-            merged_comms[i] = merged_comms[i].union(merged_comms[j])
-            merged_comms.pop(j)
-            changed = True
-    return merged_comms
+                        best_pair = (c1, c2)
+                        
+        if best_pair is None or best_gain <= 0.0:
+            break
+            
+        c1, c2 = best_pair
+        
+        comm_sets[c1] |= comm_sets[c2]
+        comm_degs[c1] = sum(deg.get(u, 0) for u in comm_sets[c1])
+        
+        c2_neighbors = dict(inter_edges[c2])
+        for k, w in c2_neighbors.items():
+            if k == c1:
+                continue
+            inter_edges[c1][k] += w
+            inter_edges[k][c1] += w
+            if c2 in inter_edges[k]:
+                del inter_edges[k][c2]
+                
+        if c2 in inter_edges[c1]:
+            del inter_edges[c1][c2]
+        if c1 in inter_edges[c2]:
+            del inter_edges[c2][c1]
+            
+        del inter_edges[c2]
+        del comm_sets[c2]
+        del comm_degs[c2]
+
+    return list(comm_sets.values())
 
 # -----------------------------------------------------------------------------
 # Dataset Loaders & Cache

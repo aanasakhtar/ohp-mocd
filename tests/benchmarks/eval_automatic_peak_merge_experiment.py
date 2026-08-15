@@ -31,42 +31,9 @@ def automatic_peak_modularity_merge(G: nx.Graph, communities: list[set]) -> list
     Option 1: Parameter-Free Automatic Peak Modularity Merge.
     Iteratively merges neighboring community pairs (C_i, C_j) that yield the highest
     positive global modularity gain (Delta EQ > 0). Stops automatically when max Delta EQ <= 0.
+    Uses O(m) inter-community edge precomputation and incremental O(1) ΔQ gain updates.
     """
-    if not communities or len(communities) <= 1:
-        return communities
-        
-    comms = [set(c) for c in communities if c]
-    
-    while len(comms) > 1:
-        best_pair = None
-        best_gain = 0.0
-        current_eq = shen_modularity_eq(G, comms)
-        
-        # Evaluate all candidate pairwise merges
-        for i in range(len(comms)):
-            for j in range(i + 1, len(comms)):
-                # Check if communities share at least one boundary edge
-                if any(G.has_edge(u, v) for u in comms[i] for v in comms[j]):
-                    merged_comms = [comms[k] for k in range(len(comms)) if k != i and k != j]
-                    merged_comms.append(comms[i] | comms[j])
-                    
-                    test_eq = shen_modularity_eq(G, merged_comms)
-                    gain = test_eq - current_eq
-                    
-                    if gain > best_gain:
-                        best_gain = gain
-                        best_pair = (i, j)
-                        
-        if best_pair is not None and best_gain > 1e-5:
-            i, j = best_pair
-            new_comm = comms[i] | comms[j]
-            comms = [comms[k] for k in range(len(comms)) if k != i and k != j]
-            comms.append(new_comm)
-        else:
-            # Stop automatically when no further merge increases modularity EQ
-            break
-            
-    return comms
+    return post_hoc_boundary_merge(G, communities, merge_threshold='auto')
 
 def run_experiment_on_dataset(net_name: str, loader_fn) -> list[dict]:
     """Runs standard OHP-MOCD vs Option 1 Automatic Peak Merge OHP-MOCD side-by-side."""

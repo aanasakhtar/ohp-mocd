@@ -60,6 +60,8 @@ pub fn hpmocd_fn(py: Python<'_>, graph: &Bound<'_, PyAny>) -> PyResult<Partition
 #[pyo3(name = "ohpmocd", signature = (
     graph,
     *,
+    pop_size = 100,
+    num_gens = 100,
     init_strategy = "boundary_seeded",
     init_overlap_prob = 0.4,
     overlap_support_threshold = 0.15,
@@ -71,6 +73,8 @@ pub fn hpmocd_fn(py: Python<'_>, graph: &Bound<'_, PyAny>) -> PyResult<Partition
 pub fn ohpmocd_fn(
     py: Python<'_>,
     graph: &Bound<'_, PyAny>,
+    pop_size: usize,
+    num_gens: usize,
     init_strategy: &str,
     init_overlap_prob: f64,
     overlap_support_threshold: f64,
@@ -83,8 +87,8 @@ pub fn ohpmocd_fn(
         py,
         graph,
         OHPMOCD_DEFAULT_DEBUG_LEVEL,
-        OHPMOCD_DEFAULT_POP_SIZE,
-        OHPMOCD_DEFAULT_NUM_GENS,
+        pop_size,
+        num_gens,
         OHPMOCD_DEFAULT_CROSS_RATE,
         OHPMOCD_DEFAULT_MUT_RATE,
         init_strategy,

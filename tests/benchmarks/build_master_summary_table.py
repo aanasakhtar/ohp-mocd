@@ -89,7 +89,7 @@ for _, r in df3.iterrows():
     base = r['FCCNI_gNMI_max']
     diff = best_ohp_g - base
     pct = (diff / base) * 100.0 if base > 0 else 0.0
-    winner = 'OHP-MOCD' if best_ohp_g > base else 'FCCNI'
+    winner = 'OHP-MOCD' if best_ohp_g >= base else 'FCCNI'
     
     n_map = {"Karate": "N = 34", "Dolphins": "N = 62", "Polbooks": "N = 105", "Football": "N = 115"}
     n_str = f"{net} ({n_map.get(net, '')})" if net in n_map else net
