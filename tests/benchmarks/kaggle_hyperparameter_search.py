@@ -198,7 +198,34 @@ def run_grid_search(datasets: list[str], grid_type: str, num_seeds: int, out_dir
                     
             dur = time.perf_counter() - t0
             all_raw_rows.extend(results)
-            print(f"  [DONE] {net_name} completed in {dur:.2f}s ({dur/60:.2f} min).\n", flush=True)
+            print(f"  [DONE] {net_name} completed in {dur:.2f}s ({dur/60:.2f} min).", flush=True)
+            
+            # Immediate Per-Dataset Best Parameters Display
+            df_cur = pd.DataFrame(results)
+            group_cols = ["PopSize", "NumGens", "CrossRate", "MutRate", "InitProb", "Strategy"]
+            agg_cur = df_cur.groupby(group_cols).agg(
+                Qov_mean=("Qov_SLPA", "mean"),
+                Qov_std=("Qov_SLPA", "std"),
+                Qov_peak=("Qov_SLPA", "max"),
+                EQ_mean=("EQ", "mean"),
+                EQ_peak=("EQ", "max"),
+                gNMI_mean=("gNMI", "mean"),
+                gNMI_peak=("gNMI", "max"),
+            ).reset_index()
+            
+            best_q = agg_cur.sort_values(by="Qov_mean", ascending=False).iloc[0]
+            print(f"\n  🏆 Top Parameters for {net_name}:")
+            print(f"     • Best Qov : pop={best_q['PopSize']}, gens={best_q['NumGens']}, cross={best_q['CrossRate']}, mut={best_q['MutRate']}, prob={best_q['InitProb']}, strat={best_q['Strategy']}")
+            print(f"       -> Qov: {best_q['Qov_mean']:.4f} ± {best_q['Qov_std']:.4f} (Peak: {best_q['Qov_peak']:.4f}) | Shen EQ: {best_q['EQ_mean']:.4f}")
+            
+            if agg_cur['gNMI_mean'].max() > 0:
+                best_g = agg_cur.sort_values(by="gNMI_mean", ascending=False).iloc[0]
+                print(f"     • Best gNMI: pop={best_g['PopSize']}, gens={best_g['NumGens']}, cross={best_g['CrossRate']}, mut={best_g['MutRate']}, prob={best_g['InitProb']}, strat={best_g['Strategy']}")
+                print(f"       -> gNMI: {best_g['gNMI_mean']:.4f} (Peak: {best_g['gNMI_peak']:.4f})")
+            print("-" * 75 + "\n", flush=True)
+            
+            # Incremental checkpoint save
+            pd.DataFrame(all_raw_rows).to_csv(out_dir / "kaggle_param_search_raw_trials.csv", index=False)
             
     df_raw = pd.DataFrame(all_raw_rows)
     raw_path = out_dir / "kaggle_param_search_raw_trials.csv"
