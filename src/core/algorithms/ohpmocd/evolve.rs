@@ -138,7 +138,7 @@ fn evolve_crisp_seeded<E>(
     Ok(individuals)
 }
 
-/// OHP NSGA-II evolution (supports crisp and overlapping modes with pluggable initialization strategy).
+/// OHP NSGA-II evolution (clean stochastic crossover and mutation).
 #[allow(clippy::too_many_arguments)]
 pub fn evolve_ohp<E>(
     graph: &Graph,
@@ -147,10 +147,6 @@ pub fn evolve_ohp<E>(
     cross_rate: f64,
     mut_rate: f64,
     init_strategy: &InitializationStrategy,
-    overlap_support_threshold: f64,
-    overlap_removal_threshold: f64,
-    switch_margin: f64,
-    alpha: f64,
     seed: Option<u64>,
     mut evaluate: impl FnMut(usize, &mut [OhpIndividual]) -> Result<(), E>,
     mut on_generation: impl FnMut(usize, usize, &[OhpIndividual]) -> Result<(), E>,
@@ -177,10 +173,6 @@ pub fn evolve_ohp<E>(
             cross_rate,
             mut_rate,
             TOURNAMENT_SIZE,
-            overlap_support_threshold,
-            overlap_removal_threshold,
-            switch_margin,
-            alpha,
             &mut rng,
         );
 

@@ -143,8 +143,11 @@ pub(crate) fn compute_occsa_membership_weights(
     weights
 }
 
-/// Computes combined soft membership weights r_{v,c} = \alpha * r_{v,c}^{OCCSA} + (1 - \alpha) * r_{v,c}^{DWI} (alpha = 0.5)
-/// Balancing unweighted topological in-degree count with degree-weighted neighbor influence.
+/// Computes combined soft membership weights:
+/// - alpha < 0.0: Pure Uniform membership r_{v,c} = 1 / |M(v)|
+/// - alpha == 0.0: Pure Degree-Weighted Influence (DWI)
+/// - alpha == 1.0: Pure Topological OCCSA in-degree
+/// - 0.0 < alpha < 1.0: Combined OCCSA + DWI blend
 pub(crate) fn compute_combined_membership_weights(
     node: NodeId,
     partition: &OhpPartition,
@@ -152,19 +155,35 @@ pub(crate) fn compute_combined_membership_weights(
     degrees: &HashMap<NodeId, usize, FxBuildHasher>,
     alpha: f64,
 ) -> FxHashMap<CommunityId, f64> {
+    let membership = match partition.get(&node) {
+        Some(m) if !m.is_empty() => m,
+        _ => return FxHashMap::default(),
+    };
+
+    if membership.len() == 1 {
+        let mut w = FxHashMap::default();
+        w.insert(membership.primary(), 1.0);
+        return w;
+    }
+
+    // Pure Uniform membership: r_{v,c} = 1 / |M(v)|
+    if alpha < 0.0 {
+        let unif = 1.0 / membership.len() as f64;
+        let mut weights = FxHashMap::default();
+        for &c in &membership.communities {
+            weights.insert(c, unif);
+        }
+        return weights;
+    }
+
     let occsa_w = compute_occsa_membership_weights(node, partition, graph);
     if alpha >= 1.0 {
         return occsa_w;
     }
     let dwi_w = compute_dwi_membership_weights(node, partition, graph, degrees);
-    if alpha <= 0.0 {
+    if alpha == 0.0 {
         return dwi_w;
     }
-
-    let membership = match partition.get(&node) {
-        Some(m) if !m.is_empty() => m,
-        _ => return FxHashMap::default(),
-    };
 
     let mut combined = FxHashMap::default();
     let mut total = 0.0;

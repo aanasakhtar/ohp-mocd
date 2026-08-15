@@ -1,4 +1,4 @@
-﻿"""
+"""
 run_lfr_benchmark.py
 
 Updated LFR Synthetic Benchmark Suite for OHP-MOCD:
@@ -35,9 +35,6 @@ BENCH_DIR = REPO_ROOT / "tests" / "benchmarks"
 LFR_BINARY_PATH = REPO_ROOT / "lfrbench_udwo"
 if sys.platform != "win32":
     LFR_BINARY_PATH = Path("/tmp/lfrbench_udwo")
-
-PARAMS_SMALL = {"init_p": 0.15, "supp_th": 0.35, "rem_th": 0.25, "margin": 0.05}
-PARAMS_LARGE = {"init_p": 0.15, "supp_th": 0.35, "rem_th": 0.25, "margin": 0.05}
 
 N_SEEDS = 5
 N_WORKERS = max(1, (os.cpu_count() or 4) - 1)
@@ -205,15 +202,16 @@ def run_lfr_seed(task):
     node_map = {n: i for i, n in enumerate(nodes)}
     rev_map  = {i: n for i, n in enumerate(nodes)}
     H = nx.relabel_nodes(G, node_map, copy=True)
-    params = PARAMS_LARGE if cfg["n"] >= 5000 else PARAMS_SMALL
-
     t0 = time.perf_counter()
     dict_res = pymocd.ohpmocd(
-        H, init_strategy=init_strategy,
-        init_overlap_prob=params["init_p"],
-        overlap_support_threshold=params["supp_th"],
-        overlap_removal_threshold=params["rem_th"],
-        switch_margin=params["margin"], seed=None,
+        H,
+        pop_size=100,
+        num_gens=100,
+        cross_rate=0.8,
+        mut_rate=0.5,
+        init_strategy=init_strategy,
+        init_overlap_prob=0.10,
+        seed=seed,
     )
     elapsed = time.perf_counter() - t0
 

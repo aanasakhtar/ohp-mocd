@@ -9,9 +9,10 @@ O(1) degree aggregation, and accurate multi-membership boundary edge filtering.
 import collections
 import networkx as nx
 
-def post_hoc_boundary_merge(G: nx.Graph, communities: list[set], merge_threshold: float | str | None = 0.50) -> list[set]:
-    """Fast, optimized post-hoc boundary modularity merge operator.
-    Supports parameter-free automatic peak modularity merge when merge_threshold is 'auto', None, or 0.0.
+def post_hoc_boundary_merge(G: nx.Graph, communities: list[set]) -> list[set]:
+    """Parameter-free post-hoc boundary modularity merge operator for OHP-MOCD.
+    Iteratively merges adjacent community pairs (C_i, C_j) yielding maximal positive modularity gain ΔQ > 0,
+    stopping automatically at peak global modularity.
     
     Inter-Community Edge Definition for Overlapping Nodes:
       An edge (u, v) is counted as an inter-community edge between C_i and C_j (C_i != C_j)
@@ -58,9 +59,6 @@ def post_hoc_boundary_merge(G: nx.Graph, communities: list[set], merge_threshold
 
     # Precompute total degree per community: sum(deg[u] for u in C)
     comm_degs = {cid: sum(deg.get(u, 0) for u in cset) for cid, cset in comm_sets.items()}
-    
-    is_auto = (merge_threshold == 'auto' or merge_threshold is None or merge_threshold == 0.0)
-    thresh_val = 0.0 if is_auto else float(merge_threshold)
 
     while len(comm_sets) > 1:
         best_pair = None
@@ -69,7 +67,6 @@ def post_hoc_boundary_merge(G: nx.Graph, communities: list[set], merge_threshold
         # Scan only existing adjacent community pairs
         for c1, neighbors in list(inter_edges.items()):
             deg_c1 = comm_degs[c1]
-            size_c1 = len(comm_sets[c1])
             
             for c2, e_inter in list(neighbors.items()):
                 if c2 <= c1 or c2 not in comm_sets:
@@ -78,17 +75,9 @@ def post_hoc_boundary_merge(G: nx.Graph, communities: list[set], merge_threshold
                 deg_c2 = comm_degs[c2]
                 delta_q = (2.0 * e_inter / two_m) - (2.0 * deg_c1 * deg_c2 / two_m_sq)
                 
-                if delta_q > 0.0:
-                    if not is_auto:
-                        size_c2 = len(comm_sets[c2])
-                        min_size = min(size_c1, size_c2)
-                        bound_ratio = e_inter / min_size if min_size > 0 else 0.0
-                        if bound_ratio < thresh_val:
-                            continue
-                    
-                    if delta_q > best_gain:
-                        best_gain = delta_q
-                        best_pair = (c1, c2)
+                if delta_q > best_gain:
+                    best_gain = delta_q
+                    best_pair = (c1, c2)
                         
         if best_pair is None or best_gain <= 0.0:
             break

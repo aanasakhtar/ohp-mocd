@@ -91,9 +91,6 @@ pub struct OhpMocd {
     cross_rate: f64,
     mut_rate: f64,
     init_strategy: InitializationStrategy,
-    overlap_support_threshold: f64,
-    overlap_removal_threshold: f64,
-    switch_margin: f64,
     alpha: f64,
     enable_f3: bool,
     seed: Option<u64>,
@@ -163,10 +160,6 @@ impl OhpMocd {
             self.cross_rate,
             self.mut_rate,
             &self.init_strategy,
-            self.overlap_support_threshold,
-            self.overlap_removal_threshold,
-            self.switch_margin,
-            self.alpha,
             self.seed,
             |generation, inds| {
                 let phase1_active = generation < phase1_gens;
@@ -221,11 +214,8 @@ impl OhpMocd {
         cross_rate = DEFAULT_CROSS_RATE,
         mut_rate = DEFAULT_MUT_RATE,
         init_strategy = "boundary_seeded",
-        init_overlap_prob = 0.4,
-        overlap_support_threshold = 0.15,
-        overlap_removal_threshold = 0.08,
-        switch_margin = 0.05,
-        alpha = 0.5,
+        init_overlap_prob = 0.10,
+        alpha = None,
         seed = None,
         objectives = None
     ))]
@@ -240,10 +230,7 @@ impl OhpMocd {
         mut_rate: f64,
         init_strategy: &str,
         init_overlap_prob: f64,
-        overlap_support_threshold: f64,
-        overlap_removal_threshold: f64,
-        switch_margin: f64,
-        alpha: f64,
+        alpha: Option<f64>,
         seed: Option<u64>,
         objectives: Option<&Bound<'_, PyList>>,
     ) -> PyResult<Self> {
@@ -280,6 +267,9 @@ impl OhpMocd {
             _ => true,
         };
 
+        // Default alpha = 0.0 uses pure Degree-Weighted Neighborhood Influence (DWI).
+        let effective_alpha = alpha.unwrap_or(0.0);
+
         Ok(OhpMocd {
             graph: rust_graph,
             debug_level,
@@ -288,10 +278,7 @@ impl OhpMocd {
             cross_rate,
             mut_rate,
             init_strategy: strat,
-            overlap_support_threshold,
-            overlap_removal_threshold,
-            switch_margin,
-            alpha,
+            alpha: effective_alpha,
             enable_f3,
             seed,
             py_graph,
@@ -395,17 +382,13 @@ mod tests {
             0.7,
             0.5,
             &InitializationStrategy::Crisp,
-            DEFAULT_OVERLAP_SUPPORT_THRESHOLD,
-            DEFAULT_OVERLAP_REMOVAL_THRESHOLD,
-            DEFAULT_SWITCH_MARGIN,
-            false,
-            0.25,
             Some(42),
             |_, inds| {
                 objectives::evaluate_ohp_population(
                     inds,
                     &g,
                     &degrees,
+                    0.5,
                     false,
                     true,
                 );
@@ -446,17 +429,13 @@ mod tests {
                 0.7,
                 0.5,
                 &strat,
-                DEFAULT_OVERLAP_SUPPORT_THRESHOLD,
-                DEFAULT_OVERLAP_REMOVAL_THRESHOLD,
-                DEFAULT_SWITCH_MARGIN,
-                false,
-                0.25,
                 Some(42),
                 |_, inds| {
                     objectives::evaluate_ohp_population(
                         inds,
                         &g,
                         &degrees,
+                        0.5,
                         false,
                         true,
                     );

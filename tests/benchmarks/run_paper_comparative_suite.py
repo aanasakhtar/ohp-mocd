@@ -263,30 +263,6 @@ def load_email() -> nx.Graph:
 # Worker Function for Parallel Runs
 # -----------------------------------------------------------------------------
 
-# Optimal hyperparameters discovered via grid search with 100% OCCSA-unified operators
-# (operators + objective evaluation both use OCCSA weights).
-DATASET_OPTIMAL_PARAMS = {
-    "Karate":    {"init_p": 0.10, "supp_th": 0.25, "rem_th": 0.25, "margin": 0.05, "alpha": 0.00, "strat": "boundary_seeded", "merge_th": "auto"},
-    "Dolphins":  {"init_p": 0.10, "supp_th": 0.25, "rem_th": 0.05, "margin": 0.05, "alpha": 0.00, "strat": "boundary_seeded", "merge_th": "auto"},
-    "Lesmis":    {"init_p": 0.10, "supp_th": 0.55, "rem_th": 0.08, "margin": 0.05, "alpha": 1.00, "strat": "crisp", "merge_th": "auto"},
-    "Polbooks":  {"init_p": 0.10, "supp_th": 0.25, "rem_th": 0.25, "margin": 0.05, "alpha": 0.00, "strat": "boundary_seeded", "merge_th": "auto"},
-    "Football":  {"init_p": 0.10, "supp_th": 0.35, "rem_th": 0.05, "margin": 0.05, "alpha": 0.00, "strat": "boundary_seeded", "merge_th": "auto"},
-    "Netscience": {"init_p": 0.15, "supp_th": 0.55, "rem_th": 0.05, "margin": 0.05, "alpha": 0.00, "strat": "crisp", "merge_th": "auto"},
-    "Scientific Collaborators (Netscience)": {"init_p": 0.15, "supp_th": 0.55, "rem_th": 0.05, "margin": 0.05, "alpha": 0.00, "strat": "crisp", "merge_th": "auto"},
-    "Celegans":  {"init_p": 0.10, "supp_th": 0.55, "rem_th": 0.25, "margin": 0.05, "alpha": 1.00, "strat": "crisp", "merge_th": "auto"},
-    "Email":     {"init_p": 0.15, "supp_th": 0.25, "rem_th": 0.08, "margin": 0.05, "alpha": 0.00, "strat": "boundary_seeded", "merge_th": "auto"},
-    "Word Association Small 1 (Fig 8a)": {"init_p": 0.15, "supp_th": 0.15, "rem_th": 0.08, "margin": 0.05, "alpha": 0.25, "strat": "boundary_seeded", "merge_th": "auto"},
-    "Word Association Small 2 (Fig 8b)": {"init_p": 0.15, "supp_th": 0.55, "rem_th": 0.02, "margin": 0.05, "alpha": 0.00, "strat": "boundary_seeded", "merge_th": "auto"},
-}
-
-# Best EQ parameters specifically used for Çetin & Amrahov (2022) Shen Q / EQ comparisons
-DATASET_OPTIMAL_PARAMS_EQ = {
-    "Karate":    {"init_p": 0.15, "supp_th": 0.55, "rem_th": 0.05, "margin": 0.05, "alpha": 0.75, "strat": "boundary_seeded", "merge_th": "auto"},
-    "Dolphins":  {"init_p": 0.10, "supp_th": 0.55, "rem_th": 0.25, "margin": 0.05, "alpha": 1.00, "strat": "crisp", "merge_th": "auto"},
-    "Lesmis":    {"init_p": 0.10, "supp_th": 0.55, "rem_th": 0.08, "margin": 0.05, "alpha": 1.00, "strat": "crisp", "merge_th": "auto"},
-    "Polbooks":  {"init_p": 0.10, "supp_th": 0.55, "rem_th": 0.08, "margin": 0.05, "alpha": 1.00, "strat": "boundary_seeded", "merge_th": "auto"},
-}
-
 def extract_ground_truth(G: nx.Graph, net_name: str) -> list[frozenset] | None:
     if net_name == "Karate":
         comms = {}
@@ -311,11 +287,7 @@ def extract_ground_truth(G: nx.Graph, net_name: str) -> list[frozenset] | None:
 
 def evaluate_single_seed_run(task_tuple: tuple) -> dict[str, float]:
     """Top-level picklable worker function running a single unseeded trial."""
-    if len(task_tuple) == 6:
-        net_name, init_strategy, edge_list, gt, custom_params, seed_val = task_tuple
-    else:
-        net_name, init_strategy, edge_list, gt, seed_val = task_tuple
-        custom_params = None
+    net_name, init_strategy, edge_list, gt, seed_val = task_tuple
         
     G = nx.Graph(edge_list)
     nodes = list(G.nodes())
@@ -323,23 +295,15 @@ def evaluate_single_seed_run(task_tuple: tuple) -> dict[str, float]:
     rev_map = {i: n for i, n in enumerate(nodes)}
     H = nx.relabel_nodes(G, node_map, copy=True)
     
-    if custom_params is not None:
-        params = custom_params
-    else:
-        params = DATASET_OPTIMAL_PARAMS.get(net_name, {"init_p": 0.10, "supp_th": 0.55, "rem_th": 0.35, "margin": 0.05, "alpha": 0.25, "strat": "boundary_seeded", "merge_th": None})
-        
-    alpha_val = params.get("alpha", 0.25)
-    strat_val = params.get("strat", init_strategy)
-    
     t0 = time.perf_counter()
     dict_res = pymocd.ohpmocd(
         H,
-        init_strategy=strat_val,
-        init_overlap_prob=params["init_p"],
-        overlap_support_threshold=params["supp_th"],
-        overlap_removal_threshold=params["rem_th"],
-        switch_margin=params["margin"],
-        alpha=alpha_val,
+        pop_size=100,
+        num_gens=100,
+        cross_rate=0.8,
+        mut_rate=0.5,
+        init_strategy=init_strategy,
+        init_overlap_prob=0.10,
         seed=seed_val
     )
     dur = time.perf_counter() - t0
@@ -351,11 +315,10 @@ def evaluate_single_seed_run(task_tuple: tuple) -> dict[str, float]:
             comm_list = [comm_list]
         for cid in comm_list:
             comm_dict.setdefault(cid, set()).add(orig_node)
-    comms = list(comm_dict.values())
+    raw_comms = list(comm_dict.values())
     
-    merge_th = params.get("merge_th", None)
-    if merge_th is not None:
-        comms = post_hoc_boundary_merge(G, comms, merge_threshold=merge_th)
+    # 100% parameter-free auto merge stopping automatically at peak global modularity
+    comms = post_hoc_boundary_merge(G, raw_comms)
     
     qov = nicosia_qov(G, comms)
     qov_slpa = nicosia_qov_slpa_scaled(G, comms)
@@ -378,15 +341,44 @@ def evaluate_single_seed_run(task_tuple: tuple) -> dict[str, float]:
         "Time": dur,
     }
 
-def run_ohpmocd_variant_parallel(G: nx.Graph, net_name: str, init_strategy: str, executor, custom_params: dict = None, num_trials: int = 15) -> dict[str, float]:
+def run_ohpmocd_variant_parallel(G: nx.Graph, net_name: str, init_strategy: str, executor, num_trials: int = 15) -> dict[str, float]:
     """Submits N=15 unseeded trial tasks in parallel to compute true mean, std, and peak metrics."""
     edge_list = list(G.edges())
     gt = extract_ground_truth(G, net_name)
     
     tasks = [
-        (net_name, init_strategy, edge_list, gt, custom_params, seed_val)
-        if custom_params is not None
-        else (net_name, init_strategy, edge_list, gt, seed_val)
+        (net_name, init_strategy, edge_list, gt, seed_val)
+        for seed_val in range(42, 42 + num_trials)
+    ]
+    
+    qov = nicosia_qov(G, comms)
+    qov_slpa = nicosia_qov_slpa_scaled(G, comms)
+    eq = shen_modularity_eq(G, comms)
+    cov = overlapping_coverage_cetin(G, comms)
+    
+    onmi_val = 0.0
+    if gt is not None:
+        comm_frozensets = [frozenset(c) for c in comms]
+        onmi_val = onmi(comm_frozensets, gt)
+        
+    return {
+        "net_name": net_name,
+        "init_strategy": init_strategy,
+        "Qov": qov,
+        "Qov_SLPA": qov_slpa,
+        "EQ": eq,
+        "Coverage": cov,
+        "ONMI": onmi_val,
+        "Time": dur,
+    }
+
+def run_ohpmocd_variant_parallel(G: nx.Graph, net_name: str, init_strategy: str, executor, num_trials: int = 15) -> dict[str, float]:
+    """Submits N=15 unseeded trial tasks in parallel to compute true mean, std, and peak metrics."""
+    edge_list = list(G.edges())
+    gt = extract_ground_truth(G, net_name)
+    
+    tasks = [
+        (net_name, init_strategy, edge_list, gt, seed_val)
         for seed_val in range(42, 42 + num_trials)
     ]
     futures = [executor.submit(evaluate_single_seed_run, t) for t in tasks]
@@ -660,9 +652,8 @@ def run_paper4_cetin_experiment(executor):
         G_obj = loader()
         G = G_obj[0] if isinstance(G_obj, tuple) else G_obj
         
-        eq_params = DATASET_OPTIMAL_PARAMS_EQ.get(net_name, None)
-        res_b = run_ohpmocd_variant_parallel(G, net_name, "boundary_seeded", executor, custom_params=eq_params)
-        res_c = run_ohpmocd_variant_parallel(G, net_name, "crisp", executor, custom_params=eq_params)
+        res_b = run_ohpmocd_variant_parallel(G, net_name, "boundary_seeded", executor)
+        res_c = run_ohpmocd_variant_parallel(G, net_name, "crisp", executor)
         b_data = cetin_table2_3[net_name]
         
         rows.append({

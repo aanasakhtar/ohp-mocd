@@ -1,6 +1,5 @@
-//! Genetic operators for OHP-MOCD (Phases 4, 5, 6).
-//! Implements random crisp initialization, Top-K overlap-aware ensemble crossover,
-//! and Top-K topology-guided mutation.
+//! Genetic operators for OHP-MOCD (Clean, threshold-free stochastic evolutionary architecture).
+//! Implements random initialization, majority consensus crossover, and local-move mutation.
 //! This Source Code Form is subject to the terms of The GNU General Public License v3.0
 //! Copyright 2025 - Guilherme Santos.
 
@@ -19,81 +18,7 @@ use rustc_hash::{FxBuildHasher, FxHashMap, FxHashSet as HashSet};
 
 const ENSEMBLE_SIZE: usize = 4;
 
-/// Extension 1: Degree-Weighted Neighborhood Influence (DWI).
-/// Calculates degree-weighted neighborhood influence for community `c` at node `v`.
-/// influence(v, c) = sum_{u in N(v) : c in M(u)} d(u) / sum_{u in N(v)} d(u)
-pub(crate) fn neighborhood_influence_weights(
-    node: NodeId,
-    partition: &OhpPartition,
-    graph: &Graph,
-) -> (FxHashMap<CommunityId, f64>, f64) {
-    let mut weights = FxHashMap::default();
-    let mut total_weight = 0.0;
-
-    if let Some(neighbors) = graph.adjacency_list.get(&node) {
-        for &neighbor in neighbors {
-            let nbr_deg = *graph.degrees.get(&neighbor).unwrap_or(&1) as f64;
-            total_weight += nbr_deg;
-            if let Some(m) = partition.get(&neighbor) {
-                for &community in &m.communities {
-                    *weights.entry(community).or_insert(0.0) += nbr_deg;
-                }
-            }
-        }
-    }
-
-    (weights, total_weight)
-}
-
-#[inline(always)]
-pub(crate) fn influence_ratio_from_weights(
-    weights: &FxHashMap<CommunityId, f64>,
-    total_weight: f64,
-    community: CommunityId,
-) -> f64 {
-    if total_weight == 0.0 {
-        return 0.0;
-    }
-
-    weights.get(&community).copied().unwrap_or(0.0) / total_weight
-}
-
-/// Calculates degree-weighted neighborhood influence for community `c` at node `v`.
-#[allow(dead_code)]
-pub fn calculate_support(
-    node: NodeId,
-    community: CommunityId,
-    partition: &OhpPartition,
-    graph: &Graph,
-) -> f64 {
-    let (weights, total_weight) = neighborhood_influence_weights(node, partition, graph);
-    influence_ratio_from_weights(&weights, total_weight, community)
-}
-
-/// FCCNI-inspired OCCSA structural fitness ratio: d_in(v,c) / d(v).
-/// From Shang et al. (2024): the Lancichinetti community fitness contribution of node v to c.
-/// Unlike DWI (degree-weighted), this is purely topological — all neighbors count equally.
-/// Unweighted counting better aligns with ground-truth community recovery (gNMI/ONMI).
-/// Returns a value in [0.0, 1.0]. Complexity: O(d(v)).
-pub(crate) fn occsa_fitness_ratio(
-    node: NodeId,
-    community: CommunityId,
-    partition: &OhpPartition,
-    graph: &Graph,
-) -> f64 {
-    let neighbors = match graph.adjacency_list.get(&node) {
-        Some(n) if !n.is_empty() => n,
-        _ => return 0.0,
-    };
-    let deg = neighbors.len() as f64;
-    let d_in = neighbors
-        .iter()
-        .filter(|&&u| partition.get(&u).map_or(false, |m| m.contains(community)))
-        .count() as f64;
-    d_in / deg
-}
-
-/// Phase 4: Pluggable population initialization (Crisp, RandomOverlap, or BoundarySeeded).
+/// Pluggable population initialization (Crisp, RandomOverlap, or BoundarySeeded).
 pub fn generate_population_ohp_seeded(
     graph: &Graph,
     population_size: usize,
@@ -197,37 +122,10 @@ pub fn generate_population_ohp_seeded(
         .collect()
 }
 
-pub(crate) const DEFAULT_ALPHA: f64 = 0.5;
-
-/// Combined topological membership weight: r_{v,c} = \alpha * OCCSA(v,c) + (1 - \alpha) * DWI(v,c)
-/// - OCCSA (unweighted d_in / d(v)) captures topological community cohesion.
-/// - DWI (degree-weighted influence) captures hub/boundary node pull.
-/// Combining both with \alpha = 0.5 balances core community membership with degree-hub overlap detection (improving F1 & gNMI).
-pub(crate) fn combined_influence_weight(
-    node: NodeId,
-    community: CommunityId,
-    partition: &OhpPartition,
-    graph: &Graph,
-    alpha: f64,
-) -> f64 {
-    let occsa = occsa_fitness_ratio(node, community, partition, graph);
-    if alpha >= 1.0 {
-        return occsa;
-    }
-    let (weights, total_weight) = neighborhood_influence_weights(node, partition, graph);
-    let dwi = influence_ratio_from_weights(&weights, total_weight, community);
-    if alpha <= 0.0 {
-        return dwi;
-    }
-    alpha * occsa + (1.0 - alpha) * dwi
-}
-
-/// Phase 5: Overlap-aware ensemble crossover over 4 parents with dynamic neighborhood support.
+/// Phase 5: Overlap-aware ensemble crossover over 4 parents with majority vote and consensus overlap.
 pub fn ensemble_crossover_ohp_with_rng<R: Rng + ?Sized>(
     parents: &[&OhpPartition],
-    graph: &Graph,
-    overlap_support_threshold: f64,
-    alpha: f64,
+    _graph: &Graph,
     rng: &mut R,
 ) -> OhpPartition {
     if parents.is_empty() {
@@ -238,10 +136,7 @@ pub fn ensemble_crossover_ohp_with_rng<R: Rng + ?Sized>(
     keys.sort_unstable();
     let mut child = FxHashMap::with_capacity_and_hasher(keys.len(), FxBuildHasher);
     let mut community_counts = FxHashMap::with_capacity_and_hasher(8, FxBuildHasher);
-    let mut runner_ups: FxHashMap<NodeId, Vec<CommunityId>> =
-        FxHashMap::with_capacity_and_hasher(keys.len(), FxBuildHasher);
 
-    // Step 1: Majority vote for primary label and collect runner-up candidates
     for &node in &keys {
         community_counts.clear();
 
@@ -262,6 +157,7 @@ pub fn ensemble_crossover_ohp_with_rng<R: Rng + ?Sized>(
             community_counts.iter().map(|(&c, &cnt)| (c, cnt)).collect();
         counts_vec.sort_unstable_by(|a, b| b.1.cmp(&a.1).then_with(|| a.0.cmp(&b.0)));
 
+        // Primary community: majority vote among parents (random tie break)
         let max_cnt = counts_vec[0].1;
         let tied_primaries: Vec<CommunityId> = counts_vec
             .iter()
@@ -270,44 +166,25 @@ pub fn ensemble_crossover_ohp_with_rng<R: Rng + ?Sized>(
             .collect();
         let primary = *tied_primaries.choose(rng).unwrap();
 
-        let runner_up_candidates: Vec<CommunityId> = counts_vec
-            .iter()
-            .filter(|&&(c, _)| c != primary)
-            .map(|&(c, _)| c)
-            .collect();
-
-        child.insert(node, OhpMembership::new(primary, &[]));
-        runner_ups.insert(node, runner_up_candidates);
-    }
-
-    // Step 2: Evaluate overlap admission using combined influence weight r_{v,c} = \alpha * OCCSA + (1 - \alpha) * DWI.
-    for &node in &keys {
-        if let Some(cands) = runner_ups.get(&node) {
-            for &cand in cands {
-                let weight = combined_influence_weight(node, cand, &child, graph, alpha);
-                if weight >= overlap_support_threshold {
-                    if let Some(m) = child.get_mut(&node) {
-                        if !m.communities.contains(&cand) {
-                            m.communities.push(cand);
-                        }
-                    }
-                }
+        // Secondary communities: any community agreed upon by >= 2 parents (50% parent consensus)
+        let mut secondaries = Vec::new();
+        for &(c, count) in &counts_vec {
+            if c != primary && count >= 2 {
+                secondaries.push(c);
             }
         }
+
+        child.insert(node, OhpMembership::new(primary, &secondaries));
     }
 
     child
 }
 
-/// Phase 6: Topology-guided mutation with Degree-Weighted Neighborhood Influence (DWI).
+/// Phase 6: Clean stochastic mutation (Add, Remove, or Switch Primary) without threshold policing.
 pub fn mutate_ohp_with_rng<R: Rng + ?Sized>(
     partition: &mut OhpPartition,
     graph: &Graph,
     mutation_rate: f64,
-    overlap_support_threshold: f64,
-    overlap_removal_threshold: f64,
-    switch_margin: f64,
-    alpha: f64,
     rng: &mut R,
 ) {
     if mutation_rate == 0.0 || partition.is_empty() {
@@ -324,90 +201,46 @@ pub fn mutate_ohp_with_rng<R: Rng + ?Sized>(
             continue;
         }
 
-        if graph.adjacency_list.get(&node).map_or(true, Vec::is_empty) {
+        let neighbors = match graph.adjacency_list.get(&node) {
+            Some(n) if !n.is_empty() => n,
+            _ => continue,
+        };
+
+        // Count community frequencies in node's neighborhood
+        let mut comm_freq = FxHashMap::default();
+        for &nbr in neighbors {
+            if let Some(m) = old_partition.get(&nbr) {
+                for &c in &m.communities {
+                    *comm_freq.entry(c).or_insert(0usize) += 1;
+                }
+            }
+        }
+
+        if comm_freq.is_empty() {
             continue;
         }
 
-        let mut neighbor_comms_set = HashSet::default();
-        if let Some(neighbors) = graph.adjacency_list.get(&node) {
-            for &nbr in neighbors {
-                if let Some(m) = old_partition.get(&nbr) {
-                    for &c in &m.communities {
-                        neighbor_comms_set.insert(c);
-                    }
-                }
-            }
-        }
-        let mut neighbor_comms: Vec<CommunityId> = neighbor_comms_set.into_iter().collect();
-        neighbor_comms.sort_unstable();
+        let mut sorted_comms: Vec<(CommunityId, usize)> = comm_freq.into_iter().collect();
+        sorted_comms.sort_unstable_by(|a, b| b.1.cmp(&a.1).then_with(|| a.0.cmp(&b.0)));
 
-        if neighbor_comms.is_empty() {
-            continue;
-        }
-
-        let current_m = old_partition[&node].clone();
-        let primary_comm = current_m.primary();
-        let primary_supp = combined_influence_weight(node, primary_comm, &old_partition, graph, alpha);
-
-        // Rule 3: Switch primary if neighbor community has higher combined weight by switch_margin
-        let mut best_switch_comm = primary_comm;
-        let mut max_switch_supp = primary_supp;
-
-        for &c in &neighbor_comms {
-            if c != primary_comm {
-                let supp = combined_influence_weight(node, c, &old_partition, graph, alpha);
-                if supp - primary_supp >= switch_margin && supp > max_switch_supp {
-                    max_switch_supp = supp;
-                    best_switch_comm = c;
-                }
-            }
-        }
-
-        let mut updated_communities = current_m.communities.clone();
-        if best_switch_comm != primary_comm {
-            updated_communities.retain(|&c| c != best_switch_comm);
-            updated_communities.insert(0, best_switch_comm);
-        }
-
-        // Rule 2: Adaptive degree-normalized removal threshold per node using combined weight
-        let deg = graph.degree(&node);
-        let node_rem_th = (overlap_removal_threshold / (deg as f64).sqrt().max(1.0)).min(overlap_removal_threshold);
-
-        let mut kept = vec![updated_communities[0]];
-        for &c in &updated_communities[1..] {
-            let supp = combined_influence_weight(node, c, &old_partition, graph, alpha);
-            if supp >= node_rem_th {
-                if !kept.contains(&c) {
-                    kept.push(c);
-                }
-            }
-        }
-        updated_communities = kept;
-
-        // Rule 1: Add supported additional memberships using combined influence weight r_{v,c}
-        let mut candidates: Vec<(CommunityId, f64)> = neighbor_comms
+        // 1. Primary community: majority vote in local neighborhood
+        let max_cnt = sorted_comms[0].1;
+        let tied_primaries: Vec<CommunityId> = sorted_comms
             .iter()
-            .filter(|&&c| !updated_communities.contains(&c))
-            .map(|&c| {
-                let score = combined_influence_weight(node, c, &old_partition, graph, alpha);
-                (c, score)
-            })
-            .filter(|&(_, score)| score >= overlap_support_threshold)
+            .filter(|(_, cnt)| *cnt == max_cnt)
+            .map(|&(c, _)| c)
             .collect();
+        let primary = *tied_primaries.choose(rng).unwrap();
 
-        candidates.sort_unstable_by(|a, b| {
-            b.1.partial_cmp(&a.1)
-                .unwrap_or(std::cmp::Ordering::Equal)
-                .then_with(|| a.0.cmp(&b.0))
-        });
-
-        for (c, _) in candidates {
-            if !updated_communities.contains(&c) {
-                updated_communities.push(c);
+        // 2. Secondary communities: any runner-up community with >= 2 connections in N(u)
+        let mut secondaries = Vec::new();
+        for &(c, count) in &sorted_comms {
+            if c != primary && count >= 2 {
+                secondaries.push(c);
             }
         }
 
-        partition.insert(node, OhpMembership::from_vec(updated_communities));
+        partition.insert(node, OhpMembership::new(primary, &secondaries));
     }
 }
 
@@ -440,10 +273,6 @@ pub fn create_offspring_ohp_seeded(
     crossover_rate: f64,
     mutation_rate: f64,
     tournament_size: usize,
-    overlap_support_threshold: f64,
-    overlap_removal_threshold: f64,
-    switch_margin: f64,
-    alpha: f64,
     rng: &mut StdRng,
 ) -> Vec<OhpIndividual> {
     let pop_size = population.len();
@@ -473,8 +302,6 @@ pub fn create_offspring_ohp_seeded(
                 ensemble_crossover_ohp_with_rng(
                     &parent_partitions,
                     graph,
-                    overlap_support_threshold,
-                    alpha,
                     &mut local_rng,
                 )
             } else {
@@ -485,10 +312,6 @@ pub fn create_offspring_ohp_seeded(
                 &mut child,
                 graph,
                 mutation_rate,
-                overlap_support_threshold,
-                overlap_removal_threshold,
-                switch_margin,
-                alpha,
                 &mut local_rng,
             );
 
@@ -527,10 +350,6 @@ pub fn mutate_with_rng(
         &mut ohp,
         graph,
         mutation_rate,
-        DEFAULT_OVERLAP_SUPPORT_THRESHOLD,
-        DEFAULT_OVERLAP_REMOVAL_THRESHOLD,
-        DEFAULT_SWITCH_MARGIN,
-        DEFAULT_ALPHA,
         rng,
     );
     *partition = ohp_to_crisp(&ohp);
@@ -552,10 +371,6 @@ pub fn create_offspring_seeded(
         crossover_rate,
         mutation_rate,
         tournament_size,
-        DEFAULT_OVERLAP_SUPPORT_THRESHOLD,
-        DEFAULT_OVERLAP_REMOVAL_THRESHOLD,
-        DEFAULT_SWITCH_MARGIN,
-        DEFAULT_ALPHA,
         rng,
     );
     ohp_offspring.into_iter().map(Into::into).collect()
@@ -624,61 +439,41 @@ mod tests {
     }
 
     #[test]
-    fn support_calculation_correctness() {
-        let g = boundary_node_graph();
-        let part: OhpPartition = [
-            (0, OhpMembership::new(0, &[])),
-            (1, OhpMembership::new(0, &[])),
-            (2, OhpMembership::new(0, &[1])),
-            (3, OhpMembership::new(1, &[])),
-            (4, OhpMembership::new(1, &[])),
-            (5, OhpMembership::new(1, &[])),
-        ]
-        .into_iter()
-        .collect();
+    fn test_ensemble_crossover_majority_and_secondary() {
+        let p1: OhpPartition = [(0, OhpMembership::new(0, &[])), (1, OhpMembership::new(0, &[1]))].into_iter().collect();
+        let p2: OhpPartition = [(0, OhpMembership::new(0, &[])), (1, OhpMembership::new(0, &[1]))].into_iter().collect();
+        let p3: OhpPartition = [(0, OhpMembership::new(1, &[])), (1, OhpMembership::new(1, &[]))].into_iter().collect();
+        let p4: OhpPartition = [(0, OhpMembership::new(0, &[])), (1, OhpMembership::new(1, &[0]))].into_iter().collect();
 
-        // Under DWI, neighbors of node 2 are 0 (deg 2, comm 0), 1 (deg 2, comm 0), 3 (deg 3, comm 1).
-        // Total weight = 2 + 2 + 3 = 7. Influence(c=0) = 4/7, Influence(c=1) = 3/7.
-        assert!((calculate_support(2, 0, &part, &g) - 4.0 / 7.0).abs() < 1e-6);
-        assert!((calculate_support(2, 1, &part, &g) - 3.0 / 7.0).abs() < 1e-6);
+        let g = boundary_node_graph();
+        let mut rng = StdRng::seed_from_u64(42);
+        let child = ensemble_crossover_ohp_with_rng(&[&p1, &p2, &p3, &p4], &g, &mut rng);
+
+        // Node 0: parents have [0, 0, 1, 0] -> majority primary is 0
+        assert_eq!(child[&0].primary(), 0);
+        // Node 1: parents have primaries [0, 0, 1, 1] (tie between 0 and 1)
+        assert!(child[&1].primary() == 0 || child[&1].primary() == 1);
     }
 
     #[test]
-    fn test_adaptive_resolution_merge_combines_strongly_connected_communities() {
-        let mut g = Graph::new();
-        // Community 0: nodes 0,1,2; Community 1: nodes 3,4,5; Community 2: nodes 6,7,8
-        // Heavy inter-edges between Community 0 and Community 1 (0-3, 1-4, 2-5)
-        for (a, b) in [
-            (0, 1), (1, 2), (0, 2),
-            (3, 4), (4, 5), (3, 5),
-            (6, 7), (7, 8), (6, 8),
-            (0, 3), (1, 4), (2, 5),
-        ] {
-            g.add_edge(a, b);
-        }
-        g.finalize();
-
+    fn test_local_move_majority_mutation() {
+        let g = boundary_node_graph();
         let mut part: OhpPartition = [
             (0, OhpMembership::new(0, &[])),
             (1, OhpMembership::new(0, &[])),
-            (2, OhpMembership::new(0, &[])),
+            (2, OhpMembership::new(1, &[])), // Node 2 in community 1, but connected to 0, 1 (comm 0) and 3 (comm 1)
             (3, OhpMembership::new(1, &[])),
             (4, OhpMembership::new(1, &[])),
             (5, OhpMembership::new(1, &[])),
-            (6, OhpMembership::new(2, &[])),
-            (7, OhpMembership::new(2, &[])),
-            (8, OhpMembership::new(2, &[])),
         ]
         .into_iter()
         .collect();
 
         let mut rng = StdRng::seed_from_u64(42);
-        let merged = try_adaptive_resolution_merge(&mut part, &g, &mut rng);
+        // Mutate with mut_rate = 1.0
+        mutate_ohp_with_rng(&mut part, &g, 1.0, &mut rng);
 
-        assert!(merged, "Adaptive resolution merge should succeed on strongly connected community pair");
-        // Nodes 0..6 should now share community label 0
-        assert_eq!(part[&0].primary(), 0);
-        assert_eq!(part[&3].primary(), 0);
-        assert_eq!(part[&6].primary(), 2);
+        // Node 2 has neighbors 0 (comm 0), 1 (comm 0), 3 (comm 1). Majority count is community 0 (2 votes).
+        assert_eq!(part[&2].primary(), 0);
     }
 }

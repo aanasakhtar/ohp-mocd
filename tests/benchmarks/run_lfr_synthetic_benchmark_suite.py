@@ -236,19 +236,18 @@ def evaluate_algorithm_on_lfr(
     n_nodes = len(nodes)
     
     if algo_name == "OHP-MOCD":
-        params = ohp_params or {"init_p": 0.15, "supp_th": 0.25, "rem_th": 0.08, "margin": 0.05, "alpha": 0.25, "strat": "boundary_seeded", "merge_th": 0.35}
         node_map = {n: i for i, n in enumerate(nodes)}
         rev_map = {i: n for i, n in enumerate(nodes)}
         H = nx.relabel_nodes(G, node_map, copy=True)
         
         dict_res = pymocd.ohpmocd(
             H,
-            init_strategy=params.get("strat", "boundary_seeded"),
-            init_overlap_prob=params.get("init_p", 0.15),
-            overlap_support_threshold=params.get("supp_th", 0.25),
-            overlap_removal_threshold=params.get("rem_th", 0.08),
-            switch_margin=0.05,
-            alpha=params.get("alpha", 0.25),
+            pop_size=100,
+            num_gens=100,
+            cross_rate=0.8,
+            mut_rate=0.5,
+            init_strategy="boundary_seeded",
+            init_overlap_prob=0.10,
             seed=42
         )
         comm_dict = {}
@@ -256,11 +255,8 @@ def evaluate_algorithm_on_lfr(
             orig_node = rev_map[n_idx]
             if isinstance(comm_list, (int, np.integer)): comm_list = [comm_list]
             for cid in comm_list: comm_dict.setdefault(cid, set()).add(orig_node)
-        comms = list(comm_dict.values())
-        
-        merge_th = params.get("merge_th", None)
-        if merge_th is not None:
-            comms = post_hoc_boundary_merge(G, comms, merge_threshold=merge_th)
+        raw_comms = list(comm_dict.values())
+        comms = post_hoc_boundary_merge(G, raw_comms)
             
     elif algo_name == "SLPA (2011)":
         comms = slpa_algorithm(G, r=0.15, t=25, seed=42)

@@ -109,12 +109,12 @@ def run_single_dataset_benchmark(dataset_item: tuple) -> list[dict]:
     t0 = time.perf_counter()
     dict_part_b = pymocd.ohpmocd(
         G,
-        max_memberships_per_node=3,
+        pop_size=100,
+        num_gens=100,
+        cross_rate=0.8,
+        mut_rate=0.5,
         init_strategy="boundary_seeded",
-        init_overlap_prob=0.40,
-        overlap_support_threshold=0.15,
-        overlap_removal_threshold=0.08,
-        switch_margin=0.05,
+        init_overlap_prob=0.10,
         seed=None,
     )
     rt_rust_b = time.perf_counter() - t0
@@ -137,11 +137,11 @@ def run_single_dataset_benchmark(dataset_item: tuple) -> list[dict]:
     t0 = time.perf_counter()
     dict_part_c = pymocd.ohpmocd(
         G,
-        max_memberships_per_node=3,
+        pop_size=100,
+        num_gens=100,
+        cross_rate=0.8,
+        mut_rate=0.5,
         init_strategy="crisp",
-        overlap_support_threshold=0.15,
-        overlap_removal_threshold=0.08,
-        switch_margin=0.05,
         seed=None,
     )
     rt_rust_c = time.perf_counter() - t0

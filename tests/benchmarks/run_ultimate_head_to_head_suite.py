@@ -1,4 +1,4 @@
-﻿"""
+"""
 run_ultimate_head_to_head_suite.py
 
 The Ultimate, Comprehensive Head-to-Head Comparative Suite:
@@ -52,18 +52,6 @@ BENCH_DIR = REPO_ROOT / "tests" / "benchmarks"
 N_SEEDS = 3
 N_WORKERS = max(1, (os.cpu_count() or 4) - 1)
 
-DATASET_PARAMS = {
-    "Karate":    {"init_p": 0.15, "supp_th": 0.35, "rem_th": 0.25, "margin": 0.05},
-    "Dolphins":  {"init_p": 0.10, "supp_th": 0.55, "rem_th": 0.35, "margin": 0.05},
-    "Lesmis":    {"init_p": 0.15, "supp_th": 0.35, "rem_th": 0.25, "margin": 0.05},
-    "Polbooks":  {"init_p": 0.10, "supp_th": 0.55, "rem_th": 0.35, "margin": 0.05},
-    "Football":  {"init_p": 0.15, "supp_th": 0.35, "rem_th": 0.25, "margin": 0.05},
-    "Netscience": {"init_p": 0.15, "supp_th": 0.35, "rem_th": 0.25, "margin": 0.05},
-    "Celegans":  {"init_p": 0.10, "supp_th": 0.55, "rem_th": 0.35, "margin": 0.05},
-    "Email":     {"init_p": 0.15, "supp_th": 0.35, "rem_th": 0.25, "margin": 0.05},
-    "default":   {"init_p": 0.15, "supp_th": 0.35, "rem_th": 0.25, "margin": 0.05},
-}
-
 def evaluate_partition(G: nx.Graph, comms: list[frozenset], gt: list[frozenset] = None) -> dict:
     comm_sets = [set(c) for c in comms if c]
     if not comm_sets:
@@ -83,18 +71,22 @@ def run_dataset_algorithm_task(task_tuple: tuple) -> dict:
     node_map = {n: i for i, n in enumerate(nodes)}
     rev_map  = {i: n for i, n in enumerate(nodes)}
     H = nx.relabel_nodes(G, node_map, copy=True)
-    params = DATASET_PARAMS.get(net_name, DATASET_PARAMS["default"])
 
     t0 = time.perf_counter()
     comms = []
 
     try:
         if algo_name == "OHP-MOCD (BS)":
-            res = pymocd.ohpmocd(H, init_strategy="boundary_seeded",
-                                 init_overlap_prob=params["init_p"],
-                                 overlap_support_threshold=params["supp_th"],
-                                 overlap_removal_threshold=params["rem_th"],
-                                 switch_margin=params["margin"], seed=None)
+            res = pymocd.ohpmocd(
+                H,
+                pop_size=100,
+                num_gens=100,
+                cross_rate=0.8,
+                mut_rate=0.5,
+                init_strategy="boundary_seeded",
+                init_overlap_prob=0.10,
+                seed=seed
+            )
             cd = {}
             for n_idx, cl in res.items():
                 orig = rev_map.get(n_idx, n_idx)
@@ -103,11 +95,15 @@ def run_dataset_algorithm_task(task_tuple: tuple) -> dict:
             comms = [frozenset(s) for s in cd.values()]
 
         elif algo_name == "OHP-MOCD (Crisp)":
-            res = pymocd.ohpmocd(H, init_strategy="crisp",
-                                 init_overlap_prob=params["init_p"],
-                                 overlap_support_threshold=params["supp_th"],
-                                 overlap_removal_threshold=params["rem_th"],
-                                 switch_margin=params["margin"], seed=None)
+            res = pymocd.ohpmocd(
+                H,
+                pop_size=100,
+                num_gens=100,
+                cross_rate=0.8,
+                mut_rate=0.5,
+                init_strategy="crisp",
+                seed=seed
+            )
             cd = {}
             for n_idx, cl in res.items():
                 orig = rev_map.get(n_idx, n_idx)
