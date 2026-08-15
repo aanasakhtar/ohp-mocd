@@ -177,13 +177,28 @@ def run_grid_search(datasets: list[str], grid_type: str, num_seeds: int, out_dir
                         seed
                     ))
                     
-            print(f"  Submitting {len(tasks)} parallel evaluation tasks across {max_workers} CPU workers...")
+            print(f"  Submitting {len(tasks)} parallel evaluation tasks across {max_workers} CPU workers...", flush=True)
             t0 = time.perf_counter()
-            futures = [executor.submit(eval_single_param_run, t) for t in tasks]
-            results = [f.result() for f in futures]
+            
+            results = []
+            completed = 0
+            total_tasks = len(tasks)
+            
+            step_interval = max(1, min(100, total_tasks // 10))
+            future_to_task = {executor.submit(eval_single_param_run, t): t for t in tasks}
+            for future in concurrent.futures.as_completed(future_to_task):
+                res = future.result()
+                results.append(res)
+                completed += 1
+                if completed % step_interval == 0 or completed == total_tasks:
+                    elapsed = time.perf_counter() - t0
+                    rate = completed / elapsed if elapsed > 0 else 0
+                    eta = (total_tasks - completed) / rate if rate > 0 else 0
+                    print(f"    -> Progress: {completed}/{total_tasks} ({completed/total_tasks*100:5.1f}%) | Elapsed: {elapsed:5.1f}s | Rate: {rate:5.1f} tasks/s | ETA: {eta:5.1f}s", flush=True)
+                    
             dur = time.perf_counter() - t0
             all_raw_rows.extend(results)
-            print(f"  [DONE] {net_name} completed in {dur:.2f}s ({dur/60:.2f} min).")
+            print(f"  [DONE] {net_name} completed in {dur:.2f}s ({dur/60:.2f} min).\n", flush=True)
             
     df_raw = pd.DataFrame(all_raw_rows)
     raw_path = out_dir / "kaggle_param_search_raw_trials.csv"
