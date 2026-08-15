@@ -58,8 +58,9 @@ plt.rcParams.update({
 # Metric Definitions (Strictly Matching Paper Specifications)
 # -----------------------------------------------------------------------------
 
-def nicosia_qov(G: nx.Graph, communities: list[set]) -> float:
-    """Nicosia et al. (2009) Overlapping Modularity Qov (Eq. 11-15 verbatim with sigmoid belongingness).
+def nicosia_qov_slpa(G: nx.Graph, communities: list[set]) -> float:
+    """Nicosia et al. (2009) Overlapping Modularity Qov with Xie & Szymanski (2011) Section IV-D linear clamp:
+    f(r) = max(0.0, min(1.0, 60.0 * r - 30.0)).
     Used in SLPA (Xie & Szymanski 2011) & MCMOEA (Wen et al. 2016).
     """
     m = G.number_of_edges()
@@ -77,17 +78,17 @@ def nicosia_qov(G: nx.Graph, communities: list[set]) -> float:
     qov = 0.0
     for comm in communities:
         # Compute network-wide average belongingness for community c: Eq 13 & 14
-        sum_f_c = sum(1.0 / (1.0 + np.exp(-60.0 * ((1.0 / node_belong[u]) - 0.5))) if node_belong[u] > 1 else 1.0 for u in comm)
+        sum_f_c = sum(max(0.0, min(1.0, 60.0 * (1.0 / node_belong[u]) - 30.0)) for u in comm)
         avg_f_c = sum_f_c / float(N)
         
         for u in comm:
             r_u = 1.0 / node_belong[u]
-            f_u = 1.0 / (1.0 + np.exp(-60.0 * (r_u - 0.5))) if node_belong[u] > 1 else 1.0
+            f_u = max(0.0, min(1.0, 60.0 * r_u - 30.0))
             l_out = f_u * avg_f_c
             
             for v in comm:
                 r_v = 1.0 / node_belong[v]
-                f_v = 1.0 / (1.0 + np.exp(-60.0 * (r_v - 0.5))) if node_belong[v] > 1 else 1.0
+                f_v = max(0.0, min(1.0, 60.0 * r_v - 30.0))
                 l_in = f_v * avg_f_c
                 
                 l_uv = f_u * f_v
@@ -97,6 +98,36 @@ def nicosia_qov(G: nx.Graph, communities: list[set]) -> float:
                 k_v = deg.get(v, 0)
                 qov += l_uv * A_uv - s_uv * ((k_u * k_v) / two_m)
     return float(qov / two_m)
+
+def nicosia_qov_unscaled(G: nx.Graph, communities: list[set]) -> float:
+    """Nicosia et al. (2009) Unscaled Overlapping Modularity Qov (Plain linear belongingness r_u = 1 / |M(u)|).
+    Reported as an internal diagnostic metric.
+    """
+    m = G.number_of_edges()
+    if m == 0 or not communities:
+        return 0.0
+    two_m = 2.0 * m
+    deg = dict(G.degree())
+    
+    node_belong = {}
+    for comm in communities:
+        for u in comm:
+            node_belong[u] = node_belong.get(u, 0) + 1
+            
+    qov = 0.0
+    for comm in communities:
+        for u in comm:
+            r_u = 1.0 / node_belong[u]
+            for v in comm:
+                r_v = 1.0 / node_belong[v]
+                f_val = r_u * r_v
+                A_uv = 1.0 if G.has_edge(u, v) else 0.0
+                k_u = deg.get(u, 0)
+                k_v = deg.get(v, 0)
+                qov += f_val * A_uv - (k_u * k_v / two_m) * f_val
+    return float(qov / two_m)
+
+nicosia_qov = nicosia_qov_slpa
 
 def shen_modularity_eq(G: nx.Graph, communities: list[set]) -> float:
     """Shen et al. (2009) Extended Modularity EQ / Modularity Q (Used in Shang 2024 & Cetin 2022)."""
@@ -298,7 +329,8 @@ def evaluate_single_seed_run(task_tuple: tuple) -> dict[str, float]:
     # 100% parameter-free auto merge stopping automatically at peak global modularity
     comms = post_hoc_boundary_merge(G, raw_comms)
     
-    qov = nicosia_qov(G, comms)
+    qov = nicosia_qov_slpa(G, comms)
+    qov_unscaled = nicosia_qov_unscaled(G, comms)
     eq = shen_modularity_eq(G, comms)
     cov = overlapping_coverage_cetin(G, comms)
     
@@ -311,6 +343,7 @@ def evaluate_single_seed_run(task_tuple: tuple) -> dict[str, float]:
         "net_name": net_name,
         "init_strategy": init_strategy,
         "Qov": qov,
+        "Qov_Unscaled": qov_unscaled,
         "EQ": eq,
         "Coverage": cov,
         "ONMI": onmi_val,
@@ -330,6 +363,7 @@ def run_ohpmocd_variant_parallel(G: nx.Graph, net_name: str, init_strategy: str,
     results = [f.result() for f in futures]
     
     qovs = [r["Qov"] for r in results]
+    qov_unscaleds = [r["Qov_Unscaled"] for r in results]
     eqs = [r["EQ"] for r in results]
     covs = [r["Coverage"] for r in results]
     onmis = [r["ONMI"] for r in results]
@@ -339,6 +373,10 @@ def run_ohpmocd_variant_parallel(G: nx.Graph, net_name: str, init_strategy: str,
         "Qov_mean": float(np.mean(qovs)),
         "Qov_std": float(np.std(qovs)),
         "Qov_peak": float(np.max(qovs)),
+        
+        "Qov_Unscaled_mean": float(np.mean(qov_unscaleds)),
+        "Qov_Unscaled_std": float(np.std(qov_unscaleds)),
+        "Qov_Unscaled_peak": float(np.max(qov_unscaleds)),
         
         "EQ_mean": float(np.mean(eqs)),
         "EQ_std": float(np.std(eqs)),
