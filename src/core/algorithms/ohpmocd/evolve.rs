@@ -148,7 +148,7 @@ pub fn evolve_ohp<E>(
     mut_rate: f64,
     init_strategy: &InitializationStrategy,
     seed: Option<u64>,
-    mut evaluate: impl FnMut(usize, &mut [OhpIndividual]) -> Result<(), E>,
+    mut evaluate: impl FnMut(&mut [OhpIndividual]) -> Result<(), E>,
     mut on_generation: impl FnMut(usize, usize, &[OhpIndividual]) -> Result<(), E>,
 ) -> Result<Vec<OhpIndividual>, E> {
     let mut rng = match seed {
@@ -162,7 +162,7 @@ pub fn evolve_ohp<E>(
             .map(OhpIndividual::new)
             .collect();
 
-    evaluate(0, &mut individuals)?;
+    evaluate(&mut individuals)?;
 
     for generation in 0..num_gens {
         select_survivors_ohp(&mut individuals, pop_size);
@@ -176,7 +176,7 @@ pub fn evolve_ohp<E>(
             &mut rng,
         );
 
-        evaluate(generation, &mut offspring)?;
+        evaluate(&mut offspring)?;
         individuals.extend(offspring);
 
         on_generation(generation, num_gens, &individuals)?;

@@ -10,7 +10,6 @@ pub const DEFAULT_MUT_RATE: f64 = 0.2;
 
 /// Default settings for 3rd objective (f3: overlap complexity cost)
 pub const DEFAULT_ENABLE_F3: bool = true;
-pub const DEFAULT_PHASE1_RATIO: f64 = 0.0;
 
 /// Population initialization strategies for OHP-MOCD.
 #[derive(Clone, Debug, PartialEq)]

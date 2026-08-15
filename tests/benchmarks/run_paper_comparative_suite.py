@@ -59,31 +59,9 @@ plt.rcParams.update({
 # -----------------------------------------------------------------------------
 
 def nicosia_qov(G: nx.Graph, communities: list[set]) -> float:
-    """Nicosia et al. (2009) Overlapping Modularity Qov (Used in SLPA & MCMOEA)."""
-    m = G.number_of_edges()
-    if m == 0:
-        return 0.0
-    two_m = 2.0 * m
-    deg = dict(G.degree())
-    
-    node_belong = {}
-    for comm in communities:
-        for u in comm:
-            node_belong[u] = node_belong.get(u, 0) + 1
-            
-    qov = 0.0
-    for comm in communities:
-        for u in comm:
-            for v in comm:
-                f_val = (1.0 / node_belong[u]) * (1.0 / node_belong[v])
-                A_uv = 1.0 if G.has_edge(u, v) else 0.0
-                k_u = deg.get(u, 0)
-                k_v = deg.get(v, 0)
-                qov += f_val * A_uv - (k_u * k_v / two_m) * f_val
-    return float(qov / two_m)
-
-def nicosia_qov_slpa_scaled(G: nx.Graph, communities: list[set]) -> float:
-    """Nicosia et al. (2009) Overlapping Modularity Qov (Eq. 11-15 verbatim with sigmoid belongingness)."""
+    """Nicosia et al. (2009) Overlapping Modularity Qov (Eq. 11-15 verbatim with sigmoid belongingness).
+    Used in SLPA (Xie & Szymanski 2011) & MCMOEA (Wen et al. 2016).
+    """
     m = G.number_of_edges()
     if m == 0 or not communities:
         return 0.0
@@ -321,7 +299,6 @@ def evaluate_single_seed_run(task_tuple: tuple) -> dict[str, float]:
     comms = post_hoc_boundary_merge(G, raw_comms)
     
     qov = nicosia_qov(G, comms)
-    qov_slpa = nicosia_qov_slpa_scaled(G, comms)
     eq = shen_modularity_eq(G, comms)
     cov = overlapping_coverage_cetin(G, comms)
     
@@ -334,38 +311,6 @@ def evaluate_single_seed_run(task_tuple: tuple) -> dict[str, float]:
         "net_name": net_name,
         "init_strategy": init_strategy,
         "Qov": qov,
-        "Qov_SLPA": qov_slpa,
-        "EQ": eq,
-        "Coverage": cov,
-        "ONMI": onmi_val,
-        "Time": dur,
-    }
-
-def run_ohpmocd_variant_parallel(G: nx.Graph, net_name: str, init_strategy: str, executor, num_trials: int = 15) -> dict[str, float]:
-    """Submits N=15 unseeded trial tasks in parallel to compute true mean, std, and peak metrics."""
-    edge_list = list(G.edges())
-    gt = extract_ground_truth(G, net_name)
-    
-    tasks = [
-        (net_name, init_strategy, edge_list, gt, seed_val)
-        for seed_val in range(42, 42 + num_trials)
-    ]
-    
-    qov = nicosia_qov(G, comms)
-    qov_slpa = nicosia_qov_slpa_scaled(G, comms)
-    eq = shen_modularity_eq(G, comms)
-    cov = overlapping_coverage_cetin(G, comms)
-    
-    onmi_val = 0.0
-    if gt is not None:
-        comm_frozensets = [frozenset(c) for c in comms]
-        onmi_val = onmi(comm_frozensets, gt)
-        
-    return {
-        "net_name": net_name,
-        "init_strategy": init_strategy,
-        "Qov": qov,
-        "Qov_SLPA": qov_slpa,
         "EQ": eq,
         "Coverage": cov,
         "ONMI": onmi_val,
@@ -385,7 +330,6 @@ def run_ohpmocd_variant_parallel(G: nx.Graph, net_name: str, init_strategy: str,
     results = [f.result() for f in futures]
     
     qovs = [r["Qov"] for r in results]
-    qov_slpas = [r["Qov_SLPA"] for r in results]
     eqs = [r["EQ"] for r in results]
     covs = [r["Coverage"] for r in results]
     onmis = [r["ONMI"] for r in results]
@@ -395,10 +339,6 @@ def run_ohpmocd_variant_parallel(G: nx.Graph, net_name: str, init_strategy: str,
         "Qov_mean": float(np.mean(qovs)),
         "Qov_std": float(np.std(qovs)),
         "Qov_peak": float(np.max(qovs)),
-        
-        "Qov_SLPA_mean": float(np.mean(qov_slpas)),
-        "Qov_SLPA_std": float(np.std(qov_slpas)),
-        "Qov_SLPA_peak": float(np.max(qov_slpas)),
         
         "EQ_mean": float(np.mean(eqs)),
         "EQ_std": float(np.std(eqs)),
@@ -465,7 +405,6 @@ def run_paper1_slpa_experiment(executor):
             "SLPA_Qov_Std": slpa_std,
             "OHP_MOCD_BoundarySeeded_Qov": res_b["Qov_mean"],
             "OHP_MOCD_BoundarySeeded_Qov_Std": res_b["Qov_std"],
-            "OHP_MOCD_SLPA_Formulated_Qov": res_b["Qov_SLPA_mean"],
             "OHP_MOCD_Crisp_Qov": res_c["Qov_mean"],
             "OHP_MOCD_Crisp_Qov_Std": res_c["Qov_std"],
         })

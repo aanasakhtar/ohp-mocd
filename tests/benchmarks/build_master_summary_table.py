@@ -31,7 +31,7 @@ for _, r in df1.iterrows():
     master_rows.append({
         'Baseline Paper Algorithm (X)': 'SLPA (2011)',
         'Dataset': f"{r['Dataset']} (N = {r['Nodes']})",
-        'Metric': 'Nicosia Qov (Unscaled)',
+        'Metric': 'Nicosia Qov',
         'Algorithm X Reported Score': f"{base:.4f}",
         'OHP-MOCD (BoundarySeeded)': f"{b_val:.4f}",
         'OHP-MOCD (Crisp)': f"{c_val:.4f}",
@@ -40,23 +40,6 @@ for _, r in df1.iterrows():
         'Pct Improvement (%)': f"{pct:+.2f}%",
         'Outperforming Algorithm': winner
     })
-    if 'OHP_MOCD_SLPA_Formulated_Qov' in r:
-        slpa_fmt_val = r['OHP_MOCD_SLPA_Formulated_Qov']
-        diff_fmt = slpa_fmt_val - base
-        pct_fmt = (diff_fmt / base) * 100.0 if base > 0 else 0.0
-        winner_fmt = 'OHP-MOCD' if slpa_fmt_val >= base else 'SLPA'
-        master_rows.append({
-            'Baseline Paper Algorithm (X)': 'SLPA (2011)',
-            'Dataset': f"{r['Dataset']} (N = {r['Nodes']})",
-            'Metric': 'Nicosia Qov (SLPA-Formulated f(x))',
-            'Algorithm X Reported Score': f"{base:.4f}",
-            'OHP-MOCD (BoundarySeeded)': f"{slpa_fmt_val:.4f}",
-            'OHP-MOCD (Crisp)': f"{c_val:.4f}",
-            'Best OHP-MOCD Score': f"{slpa_fmt_val:.4f}",
-            'Absolute Diff (Delta)': f"{diff_fmt:+.4f}",
-            'Pct Improvement (%)': f"{pct_fmt:+.2f}%",
-            'Outperforming Algorithm': winner_fmt
-        })
 
 # 2. Algorithm X = MCMOEA (2016)
 for _, r in df2.iterrows():

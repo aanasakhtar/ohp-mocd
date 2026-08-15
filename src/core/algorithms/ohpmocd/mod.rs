@@ -91,7 +91,6 @@ pub struct OhpMocd {
     cross_rate: f64,
     mut_rate: f64,
     init_strategy: InitializationStrategy,
-    alpha: f64,
     enable_f3: bool,
     seed: Option<u64>,
     py_graph: Option<Py<PyAny>>,
@@ -107,16 +106,13 @@ impl OhpMocd {
         individuals: &mut [OhpIndividual],
         graph: &Graph,
         degrees: &HashMap<i32, usize, FxBuildHasher>,
-        phase1_active: bool,
     ) -> PyResult<()> {
         if self.py_objectives.is_empty() {
             evaluate_ohp_population(
                 individuals,
                 graph,
                 degrees,
-                self.alpha,
                 self.enable_f3,
-                phase1_active,
             );
             Ok(())
         } else {
@@ -151,8 +147,6 @@ impl OhpMocd {
             hist.clear();
         }
 
-        let phase1_gens = (self.num_gens as f64 * DEFAULT_PHASE1_RATIO) as usize;
-
         let individuals = evolve_ohp(
             &self.graph,
             self.pop_size,
@@ -161,9 +155,8 @@ impl OhpMocd {
             self.mut_rate,
             &self.init_strategy,
             self.seed,
-            |generation, inds| {
-                let phase1_active = generation < phase1_gens;
-                self.evaluate_population(py, inds, &self.graph, degrees, phase1_active)
+            |inds| {
+                self.evaluate_population(py, inds, &self.graph, degrees)
             },
             |generation, num_gens, pop| {
                 let rank1_solutions: Vec<&OhpIndividual> =
@@ -173,11 +166,10 @@ impl OhpMocd {
                 if self.debug_level >= 1 {
                     debug!(
                         debug,
-                        "Gen {:3}/{} | Rank1 size: {:3} | Phase1: {}",
+                        "Gen {:3}/{} | Rank1 size: {:3}",
                         generation + 1,
                         num_gens,
-                        first_front_size,
-                        generation < phase1_gens
+                        first_front_size
                     );
                 }
 
@@ -215,7 +207,6 @@ impl OhpMocd {
         mut_rate = DEFAULT_MUT_RATE,
         init_strategy = "boundary_seeded",
         init_overlap_prob = 0.10,
-        alpha = None,
         seed = None,
         objectives = None
     ))]
@@ -230,7 +221,6 @@ impl OhpMocd {
         mut_rate: f64,
         init_strategy: &str,
         init_overlap_prob: f64,
-        alpha: Option<f64>,
         seed: Option<u64>,
         objectives: Option<&Bound<'_, PyList>>,
     ) -> PyResult<Self> {
@@ -267,9 +257,6 @@ impl OhpMocd {
             _ => true,
         };
 
-        // Default alpha = 0.0 uses pure Degree-Weighted Neighborhood Influence (DWI).
-        let effective_alpha = alpha.unwrap_or(0.0);
-
         Ok(OhpMocd {
             graph: rust_graph,
             debug_level,
@@ -278,7 +265,6 @@ impl OhpMocd {
             cross_rate,
             mut_rate,
             init_strategy: strat,
-            alpha: effective_alpha,
             enable_f3,
             seed,
             py_graph,
@@ -383,14 +369,12 @@ mod tests {
             0.5,
             &InitializationStrategy::Crisp,
             Some(42),
-            |_, inds| {
+            |inds| {
                 objectives::evaluate_ohp_population(
                     inds,
                     &g,
                     &degrees,
-                    0.5,
                     false,
-                    true,
                 );
                 Ok::<(), ()>(())
             },
@@ -430,14 +414,12 @@ mod tests {
                 0.5,
                 &strat,
                 Some(42),
-                |_, inds| {
+                |inds| {
                     objectives::evaluate_ohp_population(
                         inds,
                         &g,
                         &degrees,
-                        0.5,
                         false,
-                        true,
                     );
                     Ok::<(), ()>(())
                 },
