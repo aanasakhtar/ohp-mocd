@@ -227,10 +227,21 @@ def run_grid_search(datasets: list[str], grid_type: str, num_seeds: int, out_dir
             # Incremental checkpoint save
             pd.DataFrame(all_raw_rows).to_csv(out_dir / "kaggle_param_search_raw_trials.csv", index=False)
             
-    df_raw = pd.DataFrame(all_raw_rows)
+    # Auto-load existing trials if present
     raw_path = out_dir / "kaggle_param_search_raw_trials.csv"
+    if raw_path.exists():
+        try:
+            prev_df = pd.read_csv(raw_path)
+            all_raw_rows.extend(prev_df.to_dict('records'))
+            print(f"Loaded {len(prev_df)} existing trial evaluations from {raw_path}")
+        except Exception as e:
+            print(f"Notice: Could not load previous trials ({e})")
+            
+    df_raw = pd.DataFrame(all_raw_rows).drop_duplicates(
+        subset=["Dataset", "PopSize", "NumGens", "CrossRate", "MutRate", "InitProb", "Strategy", "Seed"]
+    )
     df_raw.to_csv(raw_path, index=False)
-    print(f"\nSaved raw trial results to {raw_path}")
+    print(f"\nSaved raw trial results ({len(df_raw)} total trials) to {raw_path}")
     
     # Aggregated Summary by Hyperparameter Configuration
     group_cols = ["Dataset", "PopSize", "NumGens", "CrossRate", "MutRate", "InitProb", "Strategy"]
@@ -251,11 +262,12 @@ def run_grid_search(datasets: list[str], grid_type: str, num_seeds: int, out_dir
     agg_df.to_csv(agg_path, index=False)
     print(f"Saved aggregated ranked summary to {agg_path}")
     
-    # Best Per Dataset Table
+    # Best Per Dataset Table (Including all evaluated datasets)
+    all_evaluated_datasets = sorted(df_raw["Dataset"].unique())
     print("\n" + "="*80)
     print(" TOP PERFORMING CONFIGURATIONS PER DATASET (BY NICOSIA Qov & gNMI)")
     print("="*80)
-    for net in datasets:
+    for net in all_evaluated_datasets:
         net_df = agg_df[agg_df["Dataset"] == net]
         if net_df.empty: continue
         best_qov_row = net_df.sort_values(by="Qov_SLPA_mean", ascending=False).iloc[0]
@@ -272,12 +284,16 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Kaggle Hyperparameter Grid Search for OHP-MOCD")
     parser.add_argument("--grid_type", type=str, choices=["quick", "standard", "full"], default="standard", help="Grid size preset")
     parser.add_argument("--seeds", type=int, default=10, help="Number of seeds per configuration")
-    parser.add_argument("--datasets", nargs="+", default=["Karate", "Dolphins", "Lesmis", "Polbooks", "Football", "Netscience", "Celegans"], help="Datasets to evaluate")
+    parser.add_argument("--datasets", nargs="+", default=["Dolphins", "Lesmis", "Polbooks", "Football", "Netscience", "Celegans"], help="Datasets to evaluate (Karate skipped by default)")
+    parser.add_argument("--skip", nargs="+", default=["Karate"], help="Datasets to skip explicitly")
     parser.add_argument("--out_dir", type=str, default=str(REPO_ROOT / "tests" / "benchmarks"), help="Output directory")
     args = parser.parse_args()
     
+    # Filter datasets by skip list
+    run_datasets = [d for d in args.datasets if d not in args.skip]
+    
     run_grid_search(
-        datasets=args.datasets,
+        datasets=run_datasets,
         grid_type=args.grid_type,
         num_seeds=args.seeds,
         out_dir=Path(args.out_dir)
