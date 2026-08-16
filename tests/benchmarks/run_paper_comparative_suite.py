@@ -307,12 +307,12 @@ def evaluate_single_seed_run(task_tuple: tuple) -> dict[str, float]:
     t0 = time.perf_counter()
     dict_res = pymocd.ohpmocd(
         H,
-        pop_size=100,
-        num_gens=100,
-        cross_rate=0.8,
-        mut_rate=0.5,
+        pop_size=300,
+        num_gens=300,
+        cross_rate=0.85,
+        mut_rate=0.30,
         init_strategy=init_strategy,
-        init_overlap_prob=0.10,
+        init_overlap_prob=0.08,
         seed=seed_val
     )
     dur = time.perf_counter() - t0

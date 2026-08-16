@@ -3,10 +3,10 @@
 //! Copyright 2025 - Guilherme Santos.
 
 pub const DEFAULT_DEBUG_LEVEL: i8 = 0;
-pub const DEFAULT_POP_SIZE: usize = 100;
-pub const DEFAULT_NUM_GENS: usize = 100;
-pub const DEFAULT_CROSS_RATE: f64 = 0.8;
-pub const DEFAULT_MUT_RATE: f64 = 0.2;
+pub const DEFAULT_POP_SIZE: usize = 300;
+pub const DEFAULT_NUM_GENS: usize = 300;
+pub const DEFAULT_CROSS_RATE: f64 = 0.85;
+pub const DEFAULT_MUT_RATE: f64 = 0.30;
 
 /// Default settings for 3rd objective (f3: overlap complexity cost)
 pub const DEFAULT_ENABLE_F3: bool = true;
@@ -25,7 +25,7 @@ pub enum InitializationStrategy {
 impl Default for InitializationStrategy {
     fn default() -> Self {
         InitializationStrategy::BoundarySeeded {
-            overlap_probability: 0.10,
+            overlap_probability: 0.08,
         }
     }
 }
