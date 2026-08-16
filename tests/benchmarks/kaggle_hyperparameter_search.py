@@ -149,10 +149,30 @@ def run_grid_search(datasets: list[str], grid_type: str, num_seeds: int, out_dir
     max_workers = max(1, (os.cpu_count() or 4) - 1)
     all_raw_rows = []
     
+    # Auto-load existing trials on disk and detect completed datasets
+    raw_path = out_dir / "kaggle_param_search_raw_trials.csv"
+    existing_completed_datasets = set()
+    if raw_path.exists():
+        try:
+            prev_df = pd.read_csv(raw_path)
+            all_raw_rows.extend(prev_df.to_dict('records'))
+            target_count = len(combinations) * num_seeds
+            for ds, grp in prev_df.groupby("Dataset"):
+                if len(grp) >= target_count:
+                    existing_completed_datasets.add(ds)
+            print(f"Loaded {len(prev_df)} existing trial evaluations from {raw_path}")
+            if existing_completed_datasets:
+                print(f"Detected fully completed datasets ({len(existing_completed_datasets)}): {', '.join(sorted(existing_completed_datasets))}")
+        except Exception as e:
+            print(f"Notice: Could not load previous trials ({e})")
+    
     with concurrent.futures.ProcessPoolExecutor(max_workers=max_workers) as executor:
         for net_name in datasets:
             if net_name not in ALL_LOADERS:
                 print(f"Skipping unknown dataset: {net_name}")
+                continue
+            if net_name in existing_completed_datasets:
+                print(f"\n[AUTO-SKIP] Dataset '{net_name}' is already completed ({len(combinations)*num_seeds} trials on disk). Skipping...")
                 continue
             print(f"\n---> Starting Parameter Sweep on: {net_name} ...")
             G_obj = ALL_LOADERS[net_name]()
