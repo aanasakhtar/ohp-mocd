@@ -56,12 +56,12 @@ GRID_PRESETS = {
         "init_strategy": ["boundary_seeded"],
     },
     "focused": {
-        "pop_size": [200, 300],
-        "num_gens": [200, 300],
-        "cross_rate": [0.75, 0.90],
-        "mut_rate": [0.30, 0.40],
+        "pop_size": [200, 300, 400, 500],
+        "num_gens": [200, 300, 400, 500],
+        "cross_rate": [0.6, 0.75, 0.90],
+        "mut_rate": [0.30, 0.40, 0.50],
         "init_overlap_prob": [0.05, 0.10],
-        "init_strategy": ["boundary_seeded"],
+        "init_strategy": ["boundary_seeded", "crisp"],
     },
     "expanded": {
         "pop_size": [350, 400],
