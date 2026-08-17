@@ -56,8 +56,16 @@ GRID_PRESETS = {
         "init_strategy": ["boundary_seeded"],
     },
     "focused": {
-        "pop_size": [200, 300, 350, 400],
-        "num_gens": [200, 300, 350, 400],
+        "pop_size": [200, 300],
+        "num_gens": [200, 300],
+        "cross_rate": [0.75, 0.90],
+        "mut_rate": [0.30, 0.40],
+        "init_overlap_prob": [0.05, 0.10],
+        "init_strategy": ["boundary_seeded"],
+    },
+    "expanded": {
+        "pop_size": [350, 400],
+        "num_gens": [350, 400],
         "cross_rate": [0.75, 0.90],
         "mut_rate": [0.30, 0.40],
         "init_overlap_prob": [0.05, 0.10],
@@ -310,7 +318,7 @@ def run_grid_search(datasets: list[str], grid_type: str, num_seeds: int, out_dir
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Kaggle Hyperparameter Grid Search for OHP-MOCD")
-    parser.add_argument("--grid_type", type=str, choices=["quick", "focused", "standard", "full"], default="standard", help="Grid size preset")
+    parser.add_argument("--grid_type", type=str, choices=["quick", "focused", "expanded", "standard", "full"], default="standard", help="Grid size preset")
     parser.add_argument("--seeds", type=int, default=10, help="Number of seeds per configuration")
     parser.add_argument("--datasets", nargs="+", default=["Dolphins", "Lesmis", "Polbooks", "Football", "Netscience", "Celegans"], help="Datasets to evaluate (Karate skipped by default)")
     parser.add_argument("--skip", nargs="+", default=["Karate"], help="Datasets to skip explicitly")
