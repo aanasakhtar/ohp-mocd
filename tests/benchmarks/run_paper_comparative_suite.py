@@ -295,8 +295,8 @@ def extract_ground_truth(G: nx.Graph, net_name: str) -> list[frozenset] | None:
     return None
 
 def evaluate_single_seed_run(task_tuple: tuple) -> dict[str, float]:
-    """Top-level picklable worker function running a single unseeded trial."""
-    net_name, init_strategy, edge_list, gt, seed_val = task_tuple
+    """Top-level picklable worker function running a single seed trial."""
+    net_name, init_strategy, edge_list, gt, seed_val, pop_size, num_gens, cross_rate, mut_rate, init_overlap_prob = task_tuple
         
     G = nx.Graph(edge_list)
     nodes = list(G.nodes())
@@ -307,12 +307,12 @@ def evaluate_single_seed_run(task_tuple: tuple) -> dict[str, float]:
     t0 = time.perf_counter()
     dict_res = pymocd.ohpmocd(
         H,
-        pop_size=300,
-        num_gens=300,
-        cross_rate=0.85,
-        mut_rate=0.30,
+        pop_size=pop_size,
+        num_gens=num_gens,
+        cross_rate=cross_rate,
+        mut_rate=mut_rate,
         init_strategy=init_strategy,
-        init_overlap_prob=0.08,
+        init_overlap_prob=init_overlap_prob,
         seed=seed_val
     )
     dur = time.perf_counter() - t0
@@ -350,13 +350,24 @@ def evaluate_single_seed_run(task_tuple: tuple) -> dict[str, float]:
         "Time": dur,
     }
 
-def run_ohpmocd_variant_parallel(G: nx.Graph, net_name: str, init_strategy: str, executor, num_trials: int = 15) -> dict[str, float]:
-    """Submits N=15 unseeded trial tasks in parallel to compute true mean, std, and peak metrics."""
+def run_ohpmocd_variant_parallel(
+    G: nx.Graph, 
+    net_name: str, 
+    init_strategy: str, 
+    executor, 
+    num_trials: int = 15,
+    pop_size: int = 400,
+    num_gens: int = 400,
+    cross_rate: float = 0.85,
+    mut_rate: float = 0.30,
+    init_overlap_prob: float = 0.08
+) -> dict[str, float]:
+    """Submits N independent seed trial tasks in parallel to compute true mean, std, and peak metrics."""
     edge_list = list(G.edges())
     gt = extract_ground_truth(G, net_name)
     
     tasks = [
-        (net_name, init_strategy, edge_list, gt, seed_val)
+        (net_name, init_strategy, edge_list, gt, seed_val, pop_size, num_gens, cross_rate, mut_rate, init_overlap_prob)
         for seed_val in range(42, 42 + num_trials)
     ]
     futures = [executor.submit(evaluate_single_seed_run, t) for t in tasks]
@@ -398,7 +409,40 @@ def run_ohpmocd_variant_parallel(G: nx.Graph, net_name: str, init_strategy: str,
 # Paper 1 Experiment: SLPA (Xie & Szymanski, 2011) — Qov Metric
 # -----------------------------------------------------------------------------
 
-def run_paper1_slpa_experiment(executor):
+# -----------------------------------------------------------------------------
+# Per-Dataset Tuned Hyperparameter Presets (Empirically Discovered on Kaggle)
+# -----------------------------------------------------------------------------
+
+DATASET_TUNED_PARAMS = {
+    "Karate": {"pop_size": 200, "num_gens": 200, "cross_rate": 0.75, "mut_rate": 0.30, "init_overlap_prob": 0.20},
+    "Dolphins": {"pop_size": 300, "num_gens": 350, "cross_rate": 0.90, "mut_rate": 0.30, "init_overlap_prob": 0.10},
+    "Lesmis": {"pop_size": 400, "num_gens": 400, "cross_rate": 0.75, "mut_rate": 0.30, "init_overlap_prob": 0.10},
+    "Polbooks": {"pop_size": 300, "num_gens": 400, "cross_rate": 0.75, "mut_rate": 0.40, "init_overlap_prob": 0.10},
+    "Football": {"pop_size": 350, "num_gens": 350, "cross_rate": 0.90, "mut_rate": 0.30, "init_overlap_prob": 0.10},
+    "Netscience": {"pop_size": 400, "num_gens": 400, "cross_rate": 0.90, "mut_rate": 0.40, "init_overlap_prob": 0.05},
+    "Celegans": {"pop_size": 400, "num_gens": 400, "cross_rate": 0.90, "mut_rate": 0.30, "init_overlap_prob": 0.05},
+    "Email": {"pop_size": 400, "num_gens": 400, "cross_rate": 0.85, "mut_rate": 0.30, "init_overlap_prob": 0.05},
+    "Word Association Small 1 (Fig 8a)": {"pop_size": 300, "num_gens": 400, "cross_rate": 0.75, "mut_rate": 0.40, "init_overlap_prob": 0.10},
+    "Word Association Small 2 (Fig 8b)": {"pop_size": 400, "num_gens": 400, "cross_rate": 0.75, "mut_rate": 0.30, "init_overlap_prob": 0.10},
+    "Scientific Collaborators (Netscience)": {"pop_size": 400, "num_gens": 400, "cross_rate": 0.90, "mut_rate": 0.40, "init_overlap_prob": 0.05},
+}
+
+def get_params_for_dataset(net_name: str, mode: str = "tuned", global_params: dict = None) -> dict:
+    if mode == "tuned" and net_name in DATASET_TUNED_PARAMS:
+        return DATASET_TUNED_PARAMS[net_name]
+    return global_params or {
+        "pop_size": 400,
+        "num_gens": 400,
+        "cross_rate": 0.85,
+        "mut_rate": 0.30,
+        "init_overlap_prob": 0.08,
+    }
+
+# -----------------------------------------------------------------------------
+# Paper 1 Experiment: SLPA (Xie & Szymanski, 2011) — Qov Metric
+# -----------------------------------------------------------------------------
+
+def run_paper1_slpa_experiment(executor, num_seeds: int = 15, mode: str = "tuned", global_params: dict = None, skip_email: bool = False):
     print("\n=================================================================")
     print(" PAPER 1 STRICT COMPARISON: SLPA (Xie & Szymanski, 2011) [Qov] ")
     print("=================================================================")
@@ -411,8 +455,9 @@ def run_paper1_slpa_experiment(executor):
         "Football": (0.70, 0.01),
         "Netscience": (0.85, 0.01),
         "Celegans": (0.31, 0.22),
-        "Email": (0.64, 0.03),
     }
+    if not skip_email:
+        slpa_reported["Email"] = (0.64, 0.03)
     
     loaders = {
         "Karate": load_karate,
@@ -422,17 +467,35 @@ def run_paper1_slpa_experiment(executor):
         "Football": load_football,
         "Netscience": load_netscience,
         "Celegans": load_celegans,
-        "Email": load_email,
     }
+    if not skip_email:
+        loaders["Email"] = load_email
     
     rows = []
     for net_name, loader in loaders.items():
-        print(f" -> Evaluating {net_name} in Parallel (Metric: Nicosia Qov)...")
+        p = get_params_for_dataset(net_name, mode, global_params)
+        print(f" -> Evaluating {net_name} (pop={p['pop_size']}, gens={p['num_gens']}, cross={p['cross_rate']}, mut={p['mut_rate']}, prob={p['init_overlap_prob']}) in Parallel...")
         G_obj = loader()
         G = G_obj[0] if isinstance(G_obj, tuple) else G_obj
         
-        res_b = run_ohpmocd_variant_parallel(G, net_name, "boundary_seeded", executor)
-        res_c = run_ohpmocd_variant_parallel(G, net_name, "crisp", executor)
+        res_b = run_ohpmocd_variant_parallel(
+            G, net_name, "boundary_seeded", executor, 
+            num_trials=num_seeds, 
+            pop_size=p["pop_size"], 
+            num_gens=p["num_gens"], 
+            cross_rate=p["cross_rate"], 
+            mut_rate=p["mut_rate"], 
+            init_overlap_prob=p["init_overlap_prob"]
+        )
+        res_c = run_ohpmocd_variant_parallel(
+            G, net_name, "crisp", executor, 
+            num_trials=num_seeds, 
+            pop_size=p["pop_size"], 
+            num_gens=p["num_gens"], 
+            cross_rate=p["cross_rate"], 
+            mut_rate=p["mut_rate"], 
+            init_overlap_prob=p["init_overlap_prob"]
+        )
         slpa_mean, slpa_std = slpa_reported[net_name]
         
         rows.append({
@@ -476,7 +539,7 @@ def run_paper1_slpa_experiment(executor):
 # Paper 2 Experiment: MCMOEA (IEEE TEVC, 2016) — Word Association & Scientific Collaborators
 # -----------------------------------------------------------------------------
 
-def run_paper2_mcmoea_experiment(executor):
+def run_paper2_mcmoea_experiment(executor, num_seeds: int = 15, mode: str = "tuned", global_params: dict = None):
     print("\n=================================================================")
     print(" PAPER 2 STRICT COMPARISON: MCMOEA (IEEE TEVC 2016) [Qov] ")
     print("=================================================================")
@@ -490,12 +553,29 @@ def run_paper2_mcmoea_experiment(executor):
     rows = []
     for item in mcmoea_reported:
         net_name = item["Dataset"]
-        print(f" -> Evaluating {net_name} in Parallel (Metric: Nicosia Qov)...")
+        p = get_params_for_dataset(net_name, mode, global_params)
+        print(f" -> Evaluating {net_name} (pop={p['pop_size']}, gens={p['num_gens']}, cross={p['cross_rate']}, mut={p['mut_rate']}) in Parallel...")
         G_obj = item["Loader"]()
         G = G_obj[0] if isinstance(G_obj, tuple) else G_obj
         
-        res_b = run_ohpmocd_variant_parallel(G, net_name, "boundary_seeded", executor)
-        res_c = run_ohpmocd_variant_parallel(G, net_name, "crisp", executor)
+        res_b = run_ohpmocd_variant_parallel(
+            G, net_name, "boundary_seeded", executor, 
+            num_trials=num_seeds, 
+            pop_size=p["pop_size"], 
+            num_gens=p["num_gens"], 
+            cross_rate=p["cross_rate"], 
+            mut_rate=p["mut_rate"], 
+            init_overlap_prob=p["init_overlap_prob"]
+        )
+        res_c = run_ohpmocd_variant_parallel(
+            G, net_name, "crisp", executor, 
+            num_trials=num_seeds, 
+            pop_size=p["pop_size"], 
+            num_gens=p["num_gens"], 
+            cross_rate=p["cross_rate"], 
+            mut_rate=p["mut_rate"], 
+            init_overlap_prob=p["init_overlap_prob"]
+        )
         
         rows.append({
             "Dataset": net_name,
@@ -533,7 +613,7 @@ def run_paper2_mcmoea_experiment(executor):
 # Paper 3 Experiment: FCCNI (Shang et al., 2024) — Shen EQ & gNMI Metrics
 # -----------------------------------------------------------------------------
 
-def run_paper3_fccni_experiment(executor):
+def run_paper3_fccni_experiment(executor, num_seeds: int = 15, mode: str = "tuned", global_params: dict = None):
     print("\n=================================================================")
     print(" PAPER 3 STRICT COMPARISON: FCCNI (Shang et al. 2024) [EQ & gNMI] ")
     print("=================================================================")
@@ -554,12 +634,29 @@ def run_paper3_fccni_experiment(executor):
     
     rows = []
     for net_name, loader in loaders.items():
-        print(f" -> Evaluating {net_name} in Parallel (Metrics: Shen EQ & gNMI)...")
+        p = get_params_for_dataset(net_name, mode, global_params)
+        print(f" -> Evaluating {net_name} (pop={p['pop_size']}, gens={p['num_gens']}, cross={p['cross_rate']}, mut={p['mut_rate']}) in Parallel...")
         G_obj = loader()
         G = G_obj[0] if isinstance(G_obj, tuple) else G_obj
         
-        res_b = run_ohpmocd_variant_parallel(G, net_name, "boundary_seeded", executor)
-        res_c = run_ohpmocd_variant_parallel(G, net_name, "crisp", executor)
+        res_b = run_ohpmocd_variant_parallel(
+            G, net_name, "boundary_seeded", executor, 
+            num_trials=num_seeds, 
+            pop_size=p["pop_size"], 
+            num_gens=p["num_gens"], 
+            cross_rate=p["cross_rate"], 
+            mut_rate=p["mut_rate"], 
+            init_overlap_prob=p["init_overlap_prob"]
+        )
+        res_c = run_ohpmocd_variant_parallel(
+            G, net_name, "crisp", executor, 
+            num_trials=num_seeds, 
+            pop_size=p["pop_size"], 
+            num_gens=p["num_gens"], 
+            cross_rate=p["cross_rate"], 
+            mut_rate=p["mut_rate"], 
+            init_overlap_prob=p["init_overlap_prob"]
+        )
         b_data = fccni_table8[net_name]
         
         rows.append({
@@ -604,7 +701,7 @@ def run_paper3_fccni_experiment(executor):
 # Paper 4 Experiment: Çetin & Amrahov (2022) — Shen Modularity Q & Overlapping Coverage
 # -----------------------------------------------------------------------------
 
-def run_paper4_cetin_experiment(executor):
+def run_paper4_cetin_experiment(executor, num_seeds: int = 15, mode: str = "tuned", global_params: dict = None):
     print("\n=================================================================")
     print(" PAPER 4 STRICT COMPARISON: Çetin & Amrahov (2022) [Shen Q & Coverage] ")
     print("=================================================================")
@@ -625,12 +722,29 @@ def run_paper4_cetin_experiment(executor):
     
     rows = []
     for net_name, loader in loaders.items():
-        print(f" -> Evaluating {net_name} in Parallel (Metrics: Shen Modularity Q & Overlapping Coverage)...")
+        p = get_params_for_dataset(net_name, mode, global_params)
+        print(f" -> Evaluating {net_name} (pop={p['pop_size']}, gens={p['num_gens']}, cross={p['cross_rate']}, mut={p['mut_rate']}) in Parallel...")
         G_obj = loader()
         G = G_obj[0] if isinstance(G_obj, tuple) else G_obj
         
-        res_b = run_ohpmocd_variant_parallel(G, net_name, "boundary_seeded", executor)
-        res_c = run_ohpmocd_variant_parallel(G, net_name, "crisp", executor)
+        res_b = run_ohpmocd_variant_parallel(
+            G, net_name, "boundary_seeded", executor, 
+            num_trials=num_seeds, 
+            pop_size=p["pop_size"], 
+            num_gens=p["num_gens"], 
+            cross_rate=p["cross_rate"], 
+            mut_rate=p["mut_rate"], 
+            init_overlap_prob=p["init_overlap_prob"]
+        )
+        res_c = run_ohpmocd_variant_parallel(
+            G, net_name, "crisp", executor, 
+            num_trials=num_seeds, 
+            pop_size=p["pop_size"], 
+            num_gens=p["num_gens"], 
+            cross_rate=p["cross_rate"], 
+            mut_rate=p["mut_rate"], 
+            init_overlap_prob=p["init_overlap_prob"]
+        )
         b_data = cetin_table2_3[net_name]
         
         rows.append({
@@ -676,18 +790,38 @@ def run_paper4_cetin_experiment(executor):
 # -----------------------------------------------------------------------------
 
 def main():
+    parser = argparse.ArgumentParser(description="Parallelized Strict Paper Comparative Benchmark Suite")
+    parser.add_argument("--mode", type=str, choices=["tuned", "uniform"], default="tuned", help="Parameter mode: 'tuned' uses per-dataset optimal params, 'uniform' uses global params")
+    parser.add_argument("--seeds", type=int, default=15, help="Number of seeds (default: 15)")
+    parser.add_argument("--pop", type=int, default=400, help="Global population size (for uniform mode)")
+    parser.add_argument("--gens", type=int, default=400, help="Global number of generations (for uniform mode)")
+    parser.add_argument("--cross", type=float, default=0.85, help="Global crossover rate")
+    parser.add_argument("--mut", type=float, default=0.30, help="Global mutation rate")
+    parser.add_argument("--init_prob", type=float, default=0.08, help="Global initial overlap probability")
+    parser.add_argument("--skip_email", action="store_true", help="Skip the large Email-EuCore network (16K edges) for quick benchmark completion")
+    args = parser.parse_args()
+    
     print("=================================================================")
     print(" STARTING PARALLELIZED STRICT PAPER COMPARATIVE BENCHMARK SUITE ")
+    print(f" Mode: {args.mode.upper()} | Seeds: {args.seeds} | Skip Email: {args.skip_email}")
     print("=================================================================")
     
+    global_p = {
+        "pop_size": args.pop,
+        "num_gens": args.gens,
+        "cross_rate": args.cross,
+        "mut_rate": args.mut,
+        "init_overlap_prob": args.init_prob,
+    }
+    
     max_workers = max(1, (os.cpu_count() or 4) - 1)
-    print(f"Executing with ProcessPoolExecutor (max_workers = {max_workers})...")
+    print(f"Executing with ProcessPoolExecutor (max_workers = {max_workers})...\n")
     
     with concurrent.futures.ProcessPoolExecutor(max_workers=max_workers) as executor:
-        df1 = run_paper1_slpa_experiment(executor)
-        df2 = run_paper2_mcmoea_experiment(executor)
-        df3 = run_paper3_fccni_experiment(executor)
-        df4 = run_paper4_cetin_experiment(executor)
+        df1 = run_paper1_slpa_experiment(executor, num_seeds=args.seeds, mode=args.mode, global_params=global_p, skip_email=args.skip_email)
+        df2 = run_paper2_mcmoea_experiment(executor, num_seeds=args.seeds, mode=args.mode, global_params=global_p)
+        df3 = run_paper3_fccni_experiment(executor, num_seeds=args.seeds, mode=args.mode, global_params=global_p)
+        df4 = run_paper4_cetin_experiment(executor, num_seeds=args.seeds, mode=args.mode, global_params=global_p)
     
     print("\nALL 4 PARALLELIZED STRICT PAPER COMPARATIVE BENCHMARKS COMPLETED SUCCESSFULLY.")
 

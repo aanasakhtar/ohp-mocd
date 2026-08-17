@@ -3,8 +3,8 @@
 //! Copyright 2025 - Guilherme Santos.
 
 pub const DEFAULT_DEBUG_LEVEL: i8 = 0;
-pub const DEFAULT_POP_SIZE: usize = 300;
-pub const DEFAULT_NUM_GENS: usize = 300;
+pub const DEFAULT_POP_SIZE: usize = 400;
+pub const DEFAULT_NUM_GENS: usize = 400;
 pub const DEFAULT_CROSS_RATE: f64 = 0.85;
 pub const DEFAULT_MUT_RATE: f64 = 0.30;
 
