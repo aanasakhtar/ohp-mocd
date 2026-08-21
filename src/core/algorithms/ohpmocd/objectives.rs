@@ -5,7 +5,7 @@
 use std::collections::HashMap;
 
 use rayon::prelude::*;
-use rustc_hash::{FxBuildHasher, FxHashMap};
+use rustc_hash::{FxBuildHasher, FxHashMap, FxHashSet};
 
 use crate::core::algorithms::ohpmocd::individual::{OhpIndividual, OhpPartition};
 use crate::core::graph::{CommunityId, Graph, NodeId, Partition};
@@ -38,6 +38,28 @@ pub fn evaluate_crisp_population(
     });
 }
 
+/// Precomputes static asymmetric node intimacy F_uv = (|N(u) ∩ N(v)| + 1) / d_u (FCCNI Eq. 4)
+pub fn precompute_intimacy(graph: &Graph) -> FxHashMap<NodeId, FxHashMap<NodeId, f64>> {
+    let mut intimacy = FxHashMap::default();
+    for (&u, u_neighbors) in &graph.adjacency_list {
+        let d_u = u_neighbors.len() as f64;
+        if d_u == 0.0 {
+            continue;
+        }
+        let u_set: FxHashSet<NodeId> = u_neighbors.iter().copied().collect();
+        let mut u_map = FxHashMap::default();
+        for &v in u_neighbors {
+            if let Some(v_neighbors) = graph.adjacency_list.get(&v) {
+                let common = v_neighbors.iter().filter(|n| u_set.contains(n)).count() as f64;
+                let f_uv = (common + 1.0) / d_u;
+                u_map.insert(v, f_uv);
+            }
+        }
+        intimacy.insert(u, u_map);
+    }
+    intimacy
+}
+
 /// Computes uniform soft membership weights: r_{v,c} = 1 / |M(v)|
 pub(crate) fn compute_uniform_membership_weights(
     node: NodeId,
@@ -56,11 +78,65 @@ pub(crate) fn compute_uniform_membership_weights(
     weights
 }
 
-/// Calculates Shi-style decomposed modularity (intra, inter) using uniform soft membership weights.
+/// Computes Direction 2 intimacy-informed soft membership weights dynamically
+pub(crate) fn compute_intimacy_membership_weights(
+    node: NodeId,
+    partition: &OhpPartition,
+    intimacy: &FxHashMap<NodeId, FxHashMap<NodeId, f64>>,
+    graph: &Graph,
+) -> FxHashMap<CommunityId, f64> {
+    let mut weights = FxHashMap::default();
+    let membership = match partition.get(&node) {
+        Some(m) if !m.is_empty() => m,
+        _ => return weights,
+    };
+
+    if membership.len() == 1 {
+        weights.insert(membership.communities[0], 1.0);
+        return weights;
+    }
+
+    let mut comm_intimacy_sum: FxHashMap<CommunityId, f64> = FxHashMap::default();
+    for &c in &membership.communities {
+        comm_intimacy_sum.insert(c, 0.0);
+    }
+
+    if let Some(u_intimacy_map) = intimacy.get(&node) {
+        if let Some(neighbors) = graph.adjacency_list.get(&node) {
+            for &v in neighbors {
+                let f_uv = *u_intimacy_map.get(&v).unwrap_or(&0.0);
+                if let Some(v_m) = partition.get(&v) {
+                    for &c in &v_m.communities {
+                        if let Some(sum_val) = comm_intimacy_sum.get_mut(&c) {
+                            *sum_val += f_uv;
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    let total_intimacy: f64 = comm_intimacy_sum.values().sum();
+    if total_intimacy > 0.0 {
+        for (c, score) in comm_intimacy_sum {
+            weights.insert(c, score / total_intimacy);
+        }
+    } else {
+        let unif = 1.0 / membership.len() as f64;
+        for &c in &membership.communities {
+            weights.insert(c, unif);
+        }
+    }
+
+    weights
+}
+
+/// Calculates Shi-style decomposed modularity (intra, inter) using uniform or intimacy soft weights.
 pub fn calculate_ohp_objectives(
     graph: &Graph,
     partition: &OhpPartition,
     degrees: &HashMap<NodeId, usize, FxBuildHasher>,
+    intimacy: Option<&FxHashMap<NodeId, FxHashMap<NodeId, f64>>>,
 ) -> (f64, f64) {
     let total_edges = graph.edges.len() as f64;
     if total_edges == 0.0 {
@@ -69,7 +145,10 @@ pub fn calculate_ohp_objectives(
 
     let mut node_weights: FxHashMap<NodeId, FxHashMap<CommunityId, f64>> = FxHashMap::default();
     for &node in partition.keys() {
-        let w_map = compute_uniform_membership_weights(node, partition);
+        let w_map = match intimacy {
+            Some(intimacy_map) => compute_intimacy_membership_weights(node, partition, intimacy_map, graph),
+            None => compute_uniform_membership_weights(node, partition),
+        };
         node_weights.insert(node, w_map);
     }
 
@@ -89,7 +168,7 @@ pub fn calculate_ohp_objectives(
         inter_sum += (comm_deg / total_edges_doubled).powi(2);
     }
 
-    // f1: Intra-community edge coverage weighted by uniform memberships
+    // f1: Intra-community edge coverage weighted by soft memberships
     let mut intra_sum = 0.0;
     for (u, v) in &graph.edges {
         if let (Some(w_u_map), Some(w_v_map)) = (node_weights.get(u), node_weights.get(v)) {
@@ -106,7 +185,7 @@ pub fn calculate_ohp_objectives(
     (intra, inter)
 }
 
-/// Calculates the 3rd objective f3: Parameter-Free Overlap Complexity Penalty.
+/// Calculates the 3rd objective f3 (Standard): Parameter-Free Overlap Complexity Count Penalty.
 /// f3 = (1/N) * sum_v max(0, |M(v)| - 1)
 pub fn calculate_f3_objective(
     graph: &Graph,
@@ -127,16 +206,76 @@ pub fn calculate_f3_objective(
     excess_memberships / total_nodes
 }
 
+/// Calculates Direction 1 Structural Overlap Cohesion objective f3:
+/// Penalizes unsupported/spurious overlapping memberships where a node has low internal degree support.
+pub fn calculate_structural_cohesion_f3(
+    graph: &Graph,
+    partition: &OhpPartition,
+) -> f64 {
+    let total_nodes = graph.nodes.len() as f64;
+    if total_nodes == 0.0 {
+        return 0.0;
+    }
+
+    let mut total_penalty = 0.0;
+
+    for (&u, membership) in partition.iter() {
+        if membership.len() <= 1 {
+            continue;
+        }
+        let deg_u = match graph.adjacency_list.get(&u) {
+            Some(nbrs) => nbrs.len() as f64,
+            None => 0.0,
+        };
+        if deg_u == 0.0 {
+            continue;
+        }
+
+        let mut internal_deg: FxHashMap<CommunityId, usize> = FxHashMap::default();
+        for &c in &membership.communities {
+            internal_deg.insert(c, 0);
+        }
+
+        if let Some(neighbors) = graph.adjacency_list.get(&u) {
+            for &v in neighbors {
+                if let Some(v_m) = partition.get(&v) {
+                    for &c in &v_m.communities {
+                        if let Some(count) = internal_deg.get_mut(&c) {
+                            *count += 1;
+                        }
+                    }
+                }
+            }
+        }
+
+        for (_c, &in_deg) in &internal_deg {
+            let support_ratio = (2.0 * in_deg as f64) / deg_u;
+            if support_ratio < 1.0 {
+                total_penalty += 1.0 - support_ratio;
+            }
+        }
+    }
+
+    total_penalty / total_nodes
+}
+
 pub fn evaluate_ohp_population(
     individuals: &mut [OhpIndividual],
     graph: &Graph,
     degrees: &HashMap<NodeId, usize, FxBuildHasher>,
     enable_f3: bool,
+    objective_mode: &str,
+    intimacy: Option<&FxHashMap<NodeId, FxHashMap<NodeId, f64>>>,
 ) {
+    let is_cohesion = objective_mode.eq_ignore_ascii_case("cohesion_intimacy");
     individuals.par_iter_mut().for_each(|ind| {
-        let (intra, inter) = calculate_ohp_objectives(graph, &ind.partition, degrees);
+        let (intra, inter) = calculate_ohp_objectives(graph, &ind.partition, degrees, if is_cohesion { intimacy } else { None });
         if enable_f3 {
-            let f3 = calculate_f3_objective(graph, &ind.partition);
+            let f3 = if is_cohesion {
+                calculate_structural_cohesion_f3(graph, &ind.partition)
+            } else {
+                calculate_f3_objective(graph, &ind.partition)
+            };
             ind.objectives = vec![intra, inter, f3];
         } else {
             ind.objectives = vec![intra, inter];

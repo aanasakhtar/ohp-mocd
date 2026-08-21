@@ -66,6 +66,7 @@ pub fn hpmocd_fn(py: Python<'_>, graph: &Bound<'_, PyAny>) -> PyResult<Partition
     mut_rate = 0.5,
     init_strategy = "boundary_seeded",
     init_overlap_prob = 0.10,
+    objective_mode = "standard",
     seed = None
 ))]
 pub fn ohpmocd_fn(
@@ -77,6 +78,7 @@ pub fn ohpmocd_fn(
     mut_rate: f64,
     init_strategy: &str,
     init_overlap_prob: f64,
+    objective_mode: &str,
     seed: Option<u64>,
 ) -> PyResult<Py<PyAny>> {
     let instance = OhpMocd::new(
@@ -89,6 +91,7 @@ pub fn ohpmocd_fn(
         mut_rate,
         init_strategy,
         init_overlap_prob,
+        objective_mode,
         seed,
         None,
     )?;

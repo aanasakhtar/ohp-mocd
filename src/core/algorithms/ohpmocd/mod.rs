@@ -92,6 +92,8 @@ pub struct OhpMocd {
     mut_rate: f64,
     init_strategy: InitializationStrategy,
     enable_f3: bool,
+    objective_mode: String,
+    intimacy: Option<FxHashMap<crate::core::graph::NodeId, FxHashMap<crate::core::graph::NodeId, f64>>>,
     seed: Option<u64>,
     py_graph: Option<Py<PyAny>>,
     py_objectives: Vec<Py<PyAny>>,
@@ -113,6 +115,8 @@ impl OhpMocd {
                 graph,
                 degrees,
                 self.enable_f3,
+                &self.objective_mode,
+                self.intimacy.as_ref(),
             );
             Ok(())
         } else {
@@ -207,6 +211,7 @@ impl OhpMocd {
         mut_rate = DEFAULT_MUT_RATE,
         init_strategy = "boundary_seeded",
         init_overlap_prob = 0.10,
+        objective_mode = "standard",
         seed = None,
         objectives = None
     ))]
@@ -221,6 +226,7 @@ impl OhpMocd {
         mut_rate: f64,
         init_strategy: &str,
         init_overlap_prob: f64,
+        objective_mode: &str,
         seed: Option<u64>,
         objectives: Option<&Bound<'_, PyList>>,
     ) -> PyResult<Self> {
@@ -257,6 +263,12 @@ impl OhpMocd {
             _ => true,
         };
 
+        let intimacy = if objective_mode.eq_ignore_ascii_case("cohesion_intimacy") {
+            Some(objectives::precompute_intimacy(&rust_graph))
+        } else {
+            None
+        };
+
         Ok(OhpMocd {
             graph: rust_graph,
             debug_level,
@@ -266,6 +278,8 @@ impl OhpMocd {
             mut_rate,
             init_strategy: strat,
             enable_f3,
+            objective_mode: objective_mode.to_string(),
+            intimacy,
             seed,
             py_graph,
             py_objectives,
