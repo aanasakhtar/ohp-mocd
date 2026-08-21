@@ -68,7 +68,7 @@ pub fn hpmocd_fn(py: Python<'_>, graph: &Bound<'_, PyAny>) -> PyResult<Partition
     init_overlap_prob = 0.10,
     objective_mode = "standard",
     selection_mode = "max_q",
-    enable_lso = false,
+    enable_lso = true,
     seed = None
 ))]
 pub fn ohpmocd_fn(
