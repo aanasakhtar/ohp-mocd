@@ -422,6 +422,8 @@ pub fn hpmocd_reference_seeded(
 
     let best = max_q_selection(&first_front);
     normalize_community_ids(graph, best.partition.clone())
+}
+
 /// Parameter-Free Memetic Boundary Local Search Operator (LSO).
 /// For every overlapping node u (|M(u)| > 1), prunes any community c where the node's internal degree
 /// falls below the random expectation threshold: d_u^{in}(c) < d_u / |M(u)|.
