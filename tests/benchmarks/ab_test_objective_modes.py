@@ -94,34 +94,31 @@ def load_network(name: str):
         gt_nodes = {}
         for n, d in G.nodes(data=True):
             club = d.get('club', 'Mr. Hi')
-            gt_nodes[n] = [0 if club == 'Mr. Hi' else 1]
-        return G, gt_nodes
+            gt_nodes.setdefault(0 if club == 'Mr. Hi' else 1, set()).add(n)
+        return G, [frozenset(c) for c in gt_nodes.values()]
     elif name == "Lesmis":
         G = nx.les_miserables_graph()
         return G, None
     elif name == "Dolphins":
         G = load_newman_gml('dolphins')
         pod2_names = {'Beak', 'CCL', 'Double', 'Fish', 'Five', 'Fork', 'Gallatin', 'Grin', 'Hook', 'Kringel', 'Oscar', 'PL', 'SN4', 'SN9', 'SN10', 'Scabs', 'Shakacle', 'SMN', 'Stripes', 'TR77', 'TSN83', 'TSN103', 'Zipfel'}
-        gt_nodes = {}
-        for n in G.nodes():
-            lbl = G.nodes[n].get('label', str(n))
-            gt_nodes[n] = [1 if lbl in pod2_names or str(n) in pod2_names else 0]
-        return G, gt_nodes
+        pod2 = set([n for n in G.nodes() if G.nodes[n].get('label', str(n)) in pod2_names or str(n) in pod2_names])
+        pod1 = set([n for n in G.nodes() if n not in pod2])
+        return G, [frozenset(pod1), frozenset(pod2)]
     elif name == "Polbooks":
         G = load_newman_gml('polbooks')
         gt_nodes = {}
-        mapping = {'c': 0, 'l': 1, 'n': 2}
         for n, d in G.nodes(data=True):
             val = d.get('value', 'n')
-            gt_nodes[n] = [mapping.get(val, 0)]
-        return G, gt_nodes
+            gt_nodes.setdefault(val, set()).add(n)
+        return G, [frozenset(c) for c in gt_nodes.values()]
     elif name == "Football":
         G = load_newman_gml('football')
         gt_nodes = {}
         for n, d in G.nodes(data=True):
             val = d.get('value', 0)
-            gt_nodes[n] = [int(val) if str(val).isdigit() else 0]
-        return G, gt_nodes
+            gt_nodes.setdefault(val, set()).add(n)
+        return G, [frozenset(c) for c in gt_nodes.values()]
     elif name == "Netscience":
         G = load_newman_gml('netscience')
         largest_cc = max(nx.connected_components(G), key=len)
@@ -129,61 +126,68 @@ def load_network(name: str):
     else:
         raise ValueError(f"Unknown dataset {name}")
 
-def compute_nicosia_qov(G: nx.Graph, partition: dict) -> float:
-    m = G.number_of_edges()
-    if m == 0: return 0.0
-    
-    node_weights = {}
-    for n, comms in partition.items():
-        if not comms: continue
-        unif = 1.0 / len(comms)
-        node_weights[n] = {c: unif for c in comms}
-        
-    def f_linear(r):
-        return max(0.0, min(1.0, 60.0 * r - 30.0))
-        
-    q_ov = 0.0
-    for u, v in G.edges():
-        w_u = node_weights.get(u, {})
-        w_v = node_weights.get(v, {})
-        common_c = set(w_u.keys()).intersection(set(w_v.keys()))
-        for c in common_c:
-            beta_u_v_c = f_linear(w_u[c]) * f_linear(w_v[c])
-            q_ov += beta_u_v_c
-            
-    # Null model
-    d = dict(G.degree())
-    for c in set(c for comms in partition.values() for c in comms):
-        comm_nodes = [n for n, comms in partition.items() if c in comms]
-        deg_sum = sum(d.get(n, 0) * node_weights[n][c] for n in comm_nodes)
-        q_ov -= (deg_sum / (2.0 * m)) ** 2
-        
-    return q_ov / (2.0 * m)
+def dict_to_communities(part: dict) -> list[frozenset]:
+    comm_map = collections.defaultdict(set)
+    for n, comms in part.items():
+        for c in comms:
+            comm_map[c].add(n)
+    return [frozenset(nodes) for nodes in comm_map.values() if nodes]
 
-def compute_shen_eq(G: nx.Graph, partition: dict) -> float:
+def compute_nicosia_qov(G: nx.Graph, communities: list[frozenset]) -> float:
     m = G.number_of_edges()
-    if m == 0: return 0.0
+    if m == 0 or not communities: return 0.0
+    two_m = 2.0 * m
+    deg = dict(G.degree())
+    N = G.number_of_nodes()
+    
+    node_belong = {}
+    for comm in communities:
+        for u in comm:
+            node_belong[u] = node_belong.get(u, 0) + 1
+            
+    qov = 0.0
+    for comm in communities:
+        sum_f_c = sum(max(0.0, min(1.0, 60.0 * (1.0 / node_belong[u]) - 30.0)) for u in comm)
+        avg_f_c = sum_f_c / float(N)
+        
+        for u in comm:
+            r_u = 1.0 / node_belong[u]
+            f_u = max(0.0, min(1.0, 60.0 * r_u - 30.0))
+            l_out = f_u * avg_f_c
+            
+            for v in comm:
+                r_v = 1.0 / node_belong[v]
+                f_v = max(0.0, min(1.0, 60.0 * r_v - 30.0))
+                l_in = f_v * avg_f_c
+                
+                l_uv = f_u * f_v
+                s_uv = l_out * l_in
+                A_uv = 1.0 if G.has_edge(u, v) else 0.0
+                k_u = deg.get(u, 0)
+                k_v = deg.get(v, 0)
+                qov += l_uv * A_uv - s_uv * ((k_u * k_v) / two_m)
+    return float(qov / two_m)
+
+def compute_shen_eq(G: nx.Graph, communities: list[frozenset]) -> float:
+    m = G.number_of_edges()
+    if m == 0 or not communities: return 0.0
+    two_m = 2.0 * m
     deg = dict(G.degree())
     
-    comm_to_nodes = collections.defaultdict(list)
-    for n, comms in partition.items():
-        for c in comms:
-            comm_to_nodes[c].append(n)
+    node_belong = {}
+    for comm in communities:
+        for u in comm:
+            node_belong[u] = node_belong.get(u, 0) + 1
             
     eq = 0.0
-    for c, nodes in comm_to_nodes.items():
-        for i in range(len(nodes)):
-            u = nodes[i]
-            o_u = len(partition[u])
-            d_u = deg.get(u, 0)
-            for j in range(len(nodes)):
-                v = nodes[j]
-                o_v = len(partition[v])
-                d_v = deg.get(v, 0)
-                a_uv = 1.0 if G.has_edge(u, v) else 0.0
-                eq += (1.0 / (o_u * o_v)) * (a_uv - (d_u * d_v) / (2.0 * m))
-                
-    return eq / (2.0 * m)
+    for comm in communities:
+        for u in comm:
+            for v in comm:
+                A_uv = 1.0 if G.has_edge(u, v) else 0.0
+                k_u = deg.get(u, 0)
+                k_v = deg.get(v, 0)
+                eq += (1.0 / (node_belong[u] * node_belong[v])) * (A_uv - (k_u * k_v) / two_m)
+    return float(eq / two_m)
 
 def run_ab_comparison(datasets=["Karate", "Dolphins", "Polbooks", "Football"], seeds=[42, 43, 44, 45, 46]):
     print("=" * 80)
@@ -233,11 +237,14 @@ def run_ab_comparison(datasets=["Karate", "Dolphins", "Polbooks", "Football"], s
             )
             t_b = time.time() - t0
             
+            comm_a = dict_to_communities(part_a)
+            comm_b = dict_to_communities(part_b)
+            
             # Metrics
-            qov_a = compute_nicosia_qov(G, part_a)
-            qov_b = compute_nicosia_qov(G, part_b)
-            eq_a = compute_shen_eq(G, part_a)
-            eq_b = compute_shen_eq(G, part_b)
+            qov_a = compute_nicosia_qov(G, comm_a)
+            qov_b = compute_nicosia_qov(G, comm_b)
+            eq_a = compute_shen_eq(G, comm_a)
+            eq_b = compute_shen_eq(G, comm_b)
             
             std_qovs.append(qov_a)
             std_eqs.append(eq_a)
@@ -248,8 +255,8 @@ def run_ab_comparison(datasets=["Karate", "Dolphins", "Polbooks", "Football"], s
             upg_times.append(t_b)
             
             if gt is not None:
-                gnmi_a = onmi(part_a, gt)
-                gnmi_b = onmi(part_b, gt)
+                gnmi_a = onmi(comm_a, gt)
+                gnmi_b = onmi(comm_b, gt)
                 std_gnmis.append(gnmi_a)
                 upg_gnmis.append(gnmi_b)
                 
