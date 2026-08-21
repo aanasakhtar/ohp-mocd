@@ -422,6 +422,72 @@ pub fn hpmocd_reference_seeded(
 
     let best = max_q_selection(&first_front);
     normalize_community_ids(graph, best.partition.clone())
+/// Parameter-Free Memetic Boundary Local Search Operator (LSO).
+/// For every overlapping node u (|M(u)| > 1), prunes any community c where the node's internal degree
+/// falls below the random expectation threshold: d_u^{in}(c) < d_u / |M(u)|.
+pub fn memetic_boundary_refinement(
+    graph: &Graph,
+    partition: &mut OhpPartition,
+) {
+    let mut updates: Vec<(crate::core::graph::NodeId, Vec<crate::core::graph::CommunityId>)> = Vec::new();
+
+    for (&u, membership) in partition.iter() {
+        if membership.len() <= 1 {
+            continue;
+        }
+
+        let neighbors = match graph.adjacency_list.get(&u) {
+            Some(nbrs) if !nbrs.is_empty() => nbrs,
+            _ => continue,
+        };
+        let deg_u = neighbors.len() as f64;
+        let k = membership.len() as f64;
+        let threshold = deg_u / k;
+
+        let mut internal_deg: rustc_hash::FxHashMap<crate::core::graph::CommunityId, usize> = rustc_hash::FxHashMap::default();
+        for &c in &membership.communities {
+            internal_deg.insert(c, 0);
+        }
+
+        for &v in neighbors {
+            if let Some(v_m) = partition.get(&v) {
+                for &c in &v_m.communities {
+                    if let Some(count) = internal_deg.get_mut(&c) {
+                        *count += 1;
+                    }
+                }
+            }
+        }
+
+        let mut kept_comms: Vec<crate::core::graph::CommunityId> = Vec::new();
+        let mut best_comm = membership.communities[0];
+        let mut max_in = 0;
+
+        for &c in &membership.communities {
+            let in_count = *internal_deg.get(&c).unwrap_or(&0);
+            if in_count > max_in {
+                max_in = in_count;
+                best_comm = c;
+            }
+            if (in_count as f64) >= threshold {
+                kept_comms.push(c);
+            }
+        }
+
+        if kept_comms.is_empty() {
+            kept_comms.push(best_comm);
+        }
+
+        if kept_comms.len() != membership.len() {
+            updates.push((u, kept_comms));
+        }
+    }
+
+    for (node, comms) in updates {
+        if let Some(m) = partition.get_mut(&node) {
+            *m = OhpMembership::from_vec(comms);
+        }
+    }
 }
 
 #[cfg(test)]

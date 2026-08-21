@@ -259,6 +259,68 @@ pub fn calculate_structural_cohesion_f3(
     total_penalty / total_nodes
 }
 
+/// Calculates Ratio Cut & Ratio Association objectives (Pizzuti / MCMOEA / Shi formulation).
+/// f1 = Intra-Community Ratio Association loss (to minimize)
+/// f2 = Inter-Community Ratio Cut (to minimize)
+pub fn calculate_ratio_cut_objectives(
+    graph: &Graph,
+    partition: &OhpPartition,
+) -> (f64, f64) {
+    let total_edges = graph.edges.len() as f64;
+    if total_edges == 0.0 {
+        return (0.0, 0.0);
+    }
+
+    let mut comm_sizes: FxHashMap<CommunityId, usize> = FxHashMap::default();
+    for membership in partition.values() {
+        for &c in &membership.communities {
+            *comm_sizes.entry(c).or_insert(0) += 1;
+        }
+    }
+
+    let mut comm_in_edges: FxHashMap<CommunityId, f64> = FxHashMap::default();
+    let mut comm_out_edges: FxHashMap<CommunityId, f64> = FxHashMap::default();
+
+    for (u, v) in &graph.edges {
+        if let (Some(m_u), Some(m_v)) = (partition.get(u), partition.get(v)) {
+            let u_set: FxHashSet<CommunityId> = m_u.communities.iter().copied().collect();
+            let v_set: FxHashSet<CommunityId> = m_v.communities.iter().copied().collect();
+
+            let common: Vec<CommunityId> = u_set.intersection(&v_set).copied().collect();
+            if !common.is_empty() {
+                let share = 1.0 / common.len() as f64;
+                for c in common {
+                    *comm_in_edges.entry(c).or_insert(0.0) += share;
+                }
+            } else {
+                for &c_u in &u_set {
+                    *comm_out_edges.entry(c_u).or_insert(0.0) += 0.5;
+                }
+                for &c_v in &v_set {
+                    *comm_out_edges.entry(c_v).or_insert(0.0) += 0.5;
+                }
+            }
+        }
+    }
+
+    let mut ra_sum = 0.0;
+    let mut rc_sum = 0.0;
+
+    for (&c, &size) in &comm_sizes {
+        if size > 0 {
+            let size_f = size as f64;
+            let in_e = *comm_in_edges.get(&c).unwrap_or(&0.0);
+            let out_e = *comm_out_edges.get(&c).unwrap_or(&0.0);
+            ra_sum += (2.0 * in_e) / size_f;
+            rc_sum += out_e / size_f;
+        }
+    }
+
+    let f1 = 1.0 / (1.0 + ra_sum);
+    let f2 = rc_sum / total_edges;
+    (f1, f2)
+}
+
 pub fn evaluate_ohp_population(
     individuals: &mut [OhpIndividual],
     graph: &Graph,
@@ -268,8 +330,14 @@ pub fn evaluate_ohp_population(
     intimacy: Option<&FxHashMap<NodeId, FxHashMap<NodeId, f64>>>,
 ) {
     let is_cohesion = objective_mode.eq_ignore_ascii_case("cohesion_intimacy");
+    let is_ratio_cut = objective_mode.eq_ignore_ascii_case("ratio_cut");
+
     individuals.par_iter_mut().for_each(|ind| {
-        let (intra, inter) = calculate_ohp_objectives(graph, &ind.partition, degrees, if is_cohesion { intimacy } else { None });
+        let (intra, inter) = if is_ratio_cut {
+            calculate_ratio_cut_objectives(graph, &ind.partition)
+        } else {
+            calculate_ohp_objectives(graph, &ind.partition, degrees, if is_cohesion { intimacy } else { None })
+        };
         if enable_f3 {
             let f3 = if is_cohesion {
                 calculate_structural_cohesion_f3(graph, &ind.partition)

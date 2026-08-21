@@ -93,6 +93,8 @@ pub struct OhpMocd {
     init_strategy: InitializationStrategy,
     enable_f3: bool,
     objective_mode: String,
+    selection_mode: String,
+    enable_lso: bool,
     intimacy: Option<FxHashMap<crate::core::graph::NodeId, FxHashMap<crate::core::graph::NodeId, f64>>>,
     seed: Option<u64>,
     py_graph: Option<Py<PyAny>>,
@@ -212,6 +214,8 @@ impl OhpMocd {
         init_strategy = "boundary_seeded",
         init_overlap_prob = 0.10,
         objective_mode = "standard",
+        selection_mode = "max_q",
+        enable_lso = false,
         seed = None,
         objectives = None
     ))]
@@ -227,6 +231,8 @@ impl OhpMocd {
         init_strategy: &str,
         init_overlap_prob: f64,
         objective_mode: &str,
+        selection_mode: &str,
+        enable_lso: bool,
         seed: Option<u64>,
         objectives: Option<&Bound<'_, PyList>>,
     ) -> PyResult<Self> {
@@ -279,6 +285,8 @@ impl OhpMocd {
             init_strategy: strat,
             enable_f3,
             objective_mode: objective_mode.to_string(),
+            selection_mode: selection_mode.to_string(),
+            enable_lso,
             intimacy,
             seed,
             py_graph,
@@ -316,22 +324,31 @@ impl OhpMocd {
 
         let mut result = Vec::with_capacity(first_front.len());
         for ind in first_front {
-            let norm = normalize_ohp_community_ids(&self.graph, ind.partition);
+            let mut part = ind.partition;
+            if self.enable_lso {
+                operators::memetic_boundary_refinement(&self.graph, &mut part);
+            }
+            let norm = normalize_ohp_community_ids(&self.graph, part);
             let py_part = ohp_partition_to_py(py, &norm)?;
             result.push((py_part, ind.objectives));
         }
         Ok(result)
     }
 
-    /// Run and return the best partition (max-Q from the Pareto front).
+    /// Run and return the best partition (selected according to selection_mode).
     /// Returns ``dict[node, list[community]]``.
     /// Isolated nodes get community ``[-1]``.
     #[pyo3(signature = ())]
     pub fn run(&self, py: Python<'_>) -> PyResult<Py<PyAny>> {
         let first_front: Vec<OhpIndividual> = self.envolve(Some(py))?;
-        let best_solution: &OhpIndividual = max_q_selection_ohp(&first_front);
-        let norm = normalize_ohp_community_ids(&self.graph, best_solution.partition.clone());
+        let best_solution: &OhpIndividual = utils::select_ohp_solution(&first_front, &self.selection_mode);
+        let mut final_partition = best_solution.partition.clone();
 
+        if self.enable_lso {
+            operators::memetic_boundary_refinement(&self.graph, &mut final_partition);
+        }
+
+        let norm = normalize_ohp_community_ids(&self.graph, final_partition);
         ohp_partition_to_py(py, &norm)
     }
 }
