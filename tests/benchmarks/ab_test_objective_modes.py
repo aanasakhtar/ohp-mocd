@@ -27,14 +27,10 @@ if str(REPO_ROOT) not in sys.path:
 import pymocd
 from evaluation.metrics import onmi, pairwise_f1
 
-DATASET_URLS = {
-    "Karate": "https://raw.githubusercontent.com/gephi/gephi/master/modules/Palettes/src/main/resources/org/gephi/layout/plugin/forceAtlas2/karate.gml",
-    "Dolphins": "https://raw.githubusercontent.com/gephi/gephi/master/modules/Palettes/src/main/resources/org/gephi/layout/plugin/forceAtlas2/dolphins.gml",
-    "Lesmis": "https://raw.githubusercontent.com/gephi/gephi/master/modules/Palettes/src/main/resources/org/gephi/layout/plugin/forceAtlas2/lesmiserables.gml",
-    "Polbooks": "https://raw.githubusercontent.com/gephi/gephi/master/modules/Palettes/src/main/resources/org/gephi/layout/plugin/forceAtlas2/polbooks.gml",
-    "Football": "https://raw.githubusercontent.com/gephi/gephi/master/modules/Palettes/src/main/resources/org/gephi/layout/plugin/forceAtlas2/football.gml",
-    "Netscience": "https://raw.githubusercontent.com/gephi/gephi/master/modules/Palettes/src/main/resources/org/gephi/layout/plugin/forceAtlas2/netscience.gml",
-}
+DATA_DIR = REPO_ROOT / "tests" / "benchmarks" / "data"
+DATA_DIR.mkdir(parents=True, exist_ok=True)
+
+HEADERS = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'}
 
 DATASET_PARAMS = {
     "Karate": {"pop": 200, "gens": 200, "cross": 0.75, "mut": 0.30, "prob": 0.20},
@@ -45,44 +41,93 @@ DATASET_PARAMS = {
     "Netscience": {"pop": 400, "gens": 400, "cross": 0.90, "mut": 0.40, "prob": 0.05},
 }
 
+def load_newman_gml(zip_name: str) -> nx.Graph:
+    local_gml = DATA_DIR / f"{zip_name}.gml"
+    if local_gml.exists():
+        content = local_gml.read_text(encoding='utf-8', errors='ignore')
+    else:
+        url = f'http://www-personal.umich.edu/~mejn/netdata/{zip_name}.zip'
+        req = urllib.request.Request(url, headers=HEADERS)
+        res = urllib.request.urlopen(req, timeout=30)
+        z = zipfile.ZipFile(io.BytesIO(res.read()))
+        gml_name = [f for f in z.namelist() if f.endswith('.gml')][0]
+        content = z.read(gml_name).decode('utf-8', errors='ignore')
+        local_gml.write_text(content, encoding='utf-8')
+    try:
+        G = nx.parse_gml(content, label='id' if 'id' in content else 'label')
+    except nx.NetworkXError:
+        lines = content.splitlines()
+        clean_lines = []
+        seen_edges = set()
+        in_edge = False
+        curr_edge_lines = []
+        source = None
+        target = None
+        for line in lines:
+            if line.strip().startswith('edge'):
+                in_edge = True
+                curr_edge_lines = [line]
+                source = None
+                target = None
+            elif in_edge:
+                curr_edge_lines.append(line)
+                if 'source' in line:
+                    source = line.strip().split()[-1]
+                elif 'target' in line:
+                    target = line.strip().split()[-1]
+                elif line.strip() == ']':
+                    in_edge = False
+                    edge_key = tuple(sorted([source, target])) if source and target else None
+                    if edge_key not in seen_edges:
+                        if edge_key:
+                            seen_edges.add(edge_key)
+                        clean_lines.extend(curr_edge_lines)
+            else:
+                clean_lines.append(line)
+        content_clean = '\n'.join(clean_lines)
+        G = nx.parse_gml(content_clean, label='id' if 'id' in content_clean else 'label')
+    return nx.Graph(G)
+
 def load_network(name: str):
-    data_dir = REPO_ROOT / "data" / "cache"
-    data_dir.mkdir(parents=True, exist_ok=True)
-    gml_file = data_dir / f"{name.lower()}.gml"
-    
-    if not gml_file.exists():
-        url = DATASET_URLS[name]
-        print(f"Downloading {name} from {url}...")
-        req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
-        with urllib.request.urlopen(req) as resp:
-            content = resp.read().decode('utf-8', errors='ignore')
-            with open(gml_file, 'w', encoding='utf-8') as f:
-                f.write(content)
-                
-    G = nx.read_gml(gml_file, label='id' if name in ['Karate', 'Dolphins', 'Lesmis', 'Polbooks', 'Football', 'Netscience'] else None)
-    G = nx.convert_node_labels_to_integers(G)
-    
-    ground_truth = None
     if name == "Karate":
+        G = nx.karate_club_graph()
         gt_nodes = {}
         for n, d in G.nodes(data=True):
-            val = d.get('value', d.get('Faction', d.get('club', 0)))
-            gt_nodes[n] = [int(val) if str(val).isdigit() else (0 if val in ['Mr. Hi', 'Officer'] else 1)]
-        ground_truth = gt_nodes
-    elif name == "Football":
+            club = d.get('club', 'Mr. Hi')
+            gt_nodes[n] = [0 if club == 'Mr. Hi' else 1]
+        return G, gt_nodes
+    elif name == "Lesmis":
+        G = nx.les_miserables_graph()
+        return G, None
+    elif name == "Dolphins":
+        G = load_newman_gml('dolphins')
+        pod2_names = {'Beak', 'CCL', 'Double', 'Fish', 'Five', 'Fork', 'Gallatin', 'Grin', 'Hook', 'Kringel', 'Oscar', 'PL', 'SN4', 'SN9', 'SN10', 'Scabs', 'Shakacle', 'SMN', 'Stripes', 'TR77', 'TSN83', 'TSN103', 'Zipfel'}
         gt_nodes = {}
-        for n, d in G.nodes(data=True):
-            gt_nodes[n] = [int(d.get('value', 0))]
-        ground_truth = gt_nodes
+        for n in G.nodes():
+            lbl = G.nodes[n].get('label', str(n))
+            gt_nodes[n] = [1 if lbl in pod2_names or str(n) in pod2_names else 0]
+        return G, gt_nodes
     elif name == "Polbooks":
+        G = load_newman_gml('polbooks')
         gt_nodes = {}
+        mapping = {'c': 0, 'l': 1, 'n': 2}
         for n, d in G.nodes(data=True):
             val = d.get('value', 'n')
-            mapping = {'c': 0, 'l': 1, 'n': 2}
             gt_nodes[n] = [mapping.get(val, 0)]
-        ground_truth = gt_nodes
-        
-    return G, ground_truth
+        return G, gt_nodes
+    elif name == "Football":
+        G = load_newman_gml('football')
+        gt_nodes = {}
+        for n, d in G.nodes(data=True):
+            val = d.get('value', 0)
+            gt_nodes[n] = [int(val) if str(val).isdigit() else 0]
+        return G, gt_nodes
+    elif name == "Netscience":
+        G = load_newman_gml('netscience')
+        largest_cc = max(nx.connected_components(G), key=len)
+        return G.subgraph(largest_cc).copy(), None
+    else:
+        raise ValueError(f"Unknown dataset {name}")
 
 def compute_nicosia_qov(G: nx.Graph, partition: dict) -> float:
     m = G.number_of_edges()
