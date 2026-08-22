@@ -12,89 +12,96 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parent.parent.parent
 BENCH_DIR = REPO_ROOT / "tests" / "benchmarks"
 
-df1 = pd.read_csv(BENCH_DIR / "strict_paper1_slpa_qov.csv")
-df2 = pd.read_csv(BENCH_DIR / "strict_paper2_mcmoea_qov.csv")
-df3 = pd.read_csv(BENCH_DIR / "strict_paper3_fccni_eq.csv")
-df4 = pd.read_csv(BENCH_DIR / "strict_paper4_cetin_q_coverage.csv")
-
 master_rows = []
 
 # 1. Algorithm X = SLPA (2011)
-for _, r in df1.iterrows():
-    b_val = r['OHP_MOCD_BoundarySeeded_Qov']
-    c_val = r['OHP_MOCD_Crisp_Qov']
-    best_ohp = max(b_val, c_val)
-    base = r['SLPA_Qov_Reported']
-    diff = best_ohp - base
-    pct = (diff / base) * 100.0 if base > 0 else 0.0
-    winner = 'OHP-MOCD' if best_ohp > base else 'SLPA'
-    master_rows.append({
-        'Baseline Paper Algorithm (X)': 'SLPA (2011)',
-        'Dataset': f"{r['Dataset']} (N = {r['Nodes']})",
-        'Metric': 'Nicosia Qov',
-        'Algorithm X Reported Score': f"{base:.4f}",
-        'OHP-MOCD (BoundarySeeded)': f"{b_val:.4f}",
-        'OHP-MOCD (Crisp)': f"{c_val:.4f}",
-        'Best OHP-MOCD Score': f"{best_ohp:.4f}",
-        'Absolute Diff (Delta)': f"{diff:+.4f}",
-        'Pct Improvement (%)': f"{pct:+.2f}%",
-        'Outperforming Algorithm': winner
-    })
+f1 = BENCH_DIR / "strict_paper1_slpa_qov.csv"
+if f1.exists():
+    df1 = pd.read_csv(f1)
+    for _, r in df1.iterrows():
+        b_val = r['OHP_MOCD_BoundarySeeded_Qov']
+        c_val = r['OHP_MOCD_Crisp_Qov']
+        best_ohp = max(b_val, c_val)
+        base = r['SLPA_Qov_Reported']
+        diff = best_ohp - base
+        pct = (diff / base) * 100.0 if base > 0 else 0.0
+        winner = 'OHP-MOCD' if best_ohp > base else 'SLPA'
+        master_rows.append({
+            'Baseline Paper Algorithm (X)': 'SLPA (2011)',
+            'Dataset': f"{r['Dataset']} (N = {r['Nodes']})",
+            'Metric': 'Nicosia Qov',
+            'Algorithm X Reported Score': f"{base:.4f}",
+            'OHP-MOCD (BoundarySeeded)': f"{b_val:.4f}",
+            'OHP-MOCD (Crisp)': f"{c_val:.4f}",
+            'Best OHP-MOCD Score': f"{best_ohp:.4f}",
+            'Absolute Diff (Delta)': f"{diff:+.4f}",
+            'Pct Improvement (%)': f"{pct:+.2f}%",
+            'Outperforming Algorithm': winner
+        })
 
 # 2. Algorithm X = MCMOEA (2016)
-for _, r in df2.iterrows():
-    b_val = r['OHP_MOCD_BoundarySeeded_Qov']
-    c_val = r['OHP_MOCD_Crisp_Qov']
-    best_ohp = max(b_val, c_val)
-    base = r['MCMOEA_Qov_Reported']
-    diff = best_ohp - base
-    pct = (diff / base) * 100.0 if base > 0 else 0.0
-    winner = 'OHP-MOCD' if best_ohp > base else 'MCMOEA'
-    master_rows.append({
-        'Baseline Paper Algorithm (X)': 'MCMOEA (2016)',
-        'Dataset': r['Dataset'],
-        'Metric': 'Nicosia Qov',
-        'Algorithm X Reported Score': f"{base:.4f}",
-        'OHP-MOCD (BoundarySeeded)': f"{b_val:.4f}",
-        'OHP-MOCD (Crisp)': f"{c_val:.4f}",
-        'Best OHP-MOCD Score': f"{best_ohp:.4f}",
-        'Absolute Diff (Delta)': f"{diff:+.4f}",
-        'Pct Improvement (%)': f"{pct:+.2f}%",
-        'Outperforming Algorithm': winner
-    })
+f2 = BENCH_DIR / "strict_paper2_mcmoea_qov.csv"
+if f2.exists():
+    df2 = pd.read_csv(f2)
+    for _, r in df2.iterrows():
+        b_val = r['OHP_MOCD_BoundarySeeded_Qov']
+        c_val = r['OHP_MOCD_Crisp_Qov']
+        best_ohp = max(b_val, c_val)
+        base = r['MCMOEA_Qov_Reported']
+        diff = best_ohp - base
+        pct = (diff / base) * 100.0 if base > 0 else 0.0
+        winner = 'OHP-MOCD' if best_ohp > base else 'MCMOEA'
+        master_rows.append({
+            'Baseline Paper Algorithm (X)': 'MCMOEA (2016)',
+            'Dataset': r['Dataset'],
+            'Metric': 'Nicosia Qov',
+            'Algorithm X Reported Score': f"{base:.4f}",
+            'OHP-MOCD (BoundarySeeded)': f"{b_val:.4f}",
+            'OHP-MOCD (Crisp)': f"{c_val:.4f}",
+            'Best OHP-MOCD Score': f"{best_ohp:.4f}",
+            'Absolute Diff (Delta)': f"{diff:+.4f}",
+            'Pct Improvement (%)': f"{pct:+.2f}%",
+            'Outperforming Algorithm': winner
+        })
 
 # 3. Algorithm X = FCCNI (2024) - Direct gNMI Comparison
-for _, r in df3.iterrows():
-    net = r['Dataset']
-    b_gnmi = r['OHP_MOCD_BoundarySeeded_gNMI']
-    c_gnmi = r['OHP_MOCD_Crisp_gNMI']
-    best_ohp_g = max(b_gnmi, c_gnmi)
-    base = r['FCCNI_gNMI_max']
-    diff = best_ohp_g - base
-    pct = (diff / base) * 100.0 if base > 0 else 0.0
-    winner = 'OHP-MOCD' if best_ohp_g >= base else 'FCCNI'
-    
-    n_map = {"Karate": "N = 34", "Dolphins": "N = 62", "Polbooks": "N = 105", "Football": "N = 115"}
-    n_str = f"{net} ({n_map.get(net, '')})" if net in n_map else net
-    
-    master_rows.append({
-        'Baseline Paper Algorithm (X)': 'FCCNI (2024)',
-        'Dataset': n_str,
-        'Metric': 'gNMI',
-        'Algorithm X Reported Score': f"{base:.4f}",
-        'OHP-MOCD (BoundarySeeded)': f"{b_gnmi:.4f}",
-        'OHP-MOCD (Crisp)': f"{c_gnmi:.4f}",
-        'Best OHP-MOCD Score': f"{best_ohp_g:.4f}",
-        'Absolute Diff (Delta)': f"{diff:+.4f}",
-        'Pct Improvement (%)': f"{pct:+.2f}%",
-        'Outperforming Algorithm': winner
-    })
+f3 = BENCH_DIR / "strict_paper3_fccni_eq.csv"
+if f3.exists():
+    df3 = pd.read_csv(f3)
+    for _, r in df3.iterrows():
+        net = r['Dataset']
+        b_gnmi = r['OHP_MOCD_BoundarySeeded_gNMI']
+        c_gnmi = r['OHP_MOCD_Crisp_gNMI']
+        best_ohp_g = max(b_gnmi, c_gnmi)
+        base = r['FCCNI_gNMI_max']
+        diff = best_ohp_g - base
+        pct = (diff / base) * 100.0 if base > 0 else 0.0
+        winner = 'OHP-MOCD' if best_ohp_g >= base else 'FCCNI'
+        
+        n_map = {"Karate": "N = 34", "Dolphins": "N = 62", "Polbooks": "N = 105", "Football": "N = 115"}
+        n_str = f"{net} ({n_map.get(net, '')})" if net in n_map else net
+        
+        master_rows.append({
+            'Baseline Paper Algorithm (X)': 'FCCNI (2024)',
+            'Dataset': n_str,
+            'Metric': 'gNMI',
+            'Algorithm X Reported Score': f"{base:.4f}",
+            'OHP-MOCD (BoundarySeeded)': f"{b_gnmi:.4f}",
+            'OHP-MOCD (Crisp)': f"{c_gnmi:.4f}",
+            'Best OHP-MOCD Score': f"{best_ohp_g:.4f}",
+            'Absolute Diff (Delta)': f"{diff:+.4f}",
+            'Pct Improvement (%)': f"{pct:+.2f}%",
+            'Outperforming Algorithm': winner
+        })
 
 # 4. Algorithm X = Çetin & Amrahov (2022)
-for _, r in df4.iterrows():
-    net = r['Dataset']
-    n_map = {"Karate": "N = 34", "Dolphins": "N = 62", "Lesmis": "N = 77", "Polbooks": "N = 105"}
-    n_str = f"{net} ({n_map.get(net, '')})" if net in n_map else net
+f4 = BENCH_DIR / "strict_paper4_cetin_q_coverage.csv"
+if f4.exists():
+    df4 = pd.read_csv(f4)
+    for _, r in df4.iterrows():
+        net = r['Dataset']
+        n_map = {"Karate": "N = 34", "Dolphins": "N = 62", "Lesmis": "N = 77", "Polbooks": "N = 105"}
+        n_str = f"{net} ({n_map.get(net, '')})" if net in n_map else net
     
     # Shen Q
     b_q = r['OHP_MOCD_BoundarySeeded_Shen_Q']

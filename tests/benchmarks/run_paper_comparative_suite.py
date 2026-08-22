@@ -418,7 +418,7 @@ def run_ohpmocd_variant_parallel(
 DATASET_TUNED_PARAMS = {
     "Karate": {"pop_size": 200, "num_gens": 200, "cross_rate": 0.75, "mut_rate": 0.30, "init_overlap_prob": 0.20},
     "Dolphins": {"pop_size": 300, "num_gens": 350, "cross_rate": 0.90, "mut_rate": 0.30, "init_overlap_prob": 0.10},
-    "Lesmis": {"pop_size": 400, "num_gens": 400, "cross_rate": 0.75, "mut_rate": 0.30, "init_overlap_prob": 0.10},
+    "Lesmis": {"pop_size": 400, "num_gens": 450, "cross_rate": 0.85, "mut_rate": 0.25, "init_overlap_prob": 0.03},
     "Polbooks": {"pop_size": 300, "num_gens": 400, "cross_rate": 0.75, "mut_rate": 0.40, "init_overlap_prob": 0.10},
     "Football": {"pop_size": 350, "num_gens": 350, "cross_rate": 0.90, "mut_rate": 0.30, "init_overlap_prob": 0.10},
     "Netscience": {"pop_size": 400, "num_gens": 400, "cross_rate": 0.90, "mut_rate": 0.40, "init_overlap_prob": 0.05},
@@ -822,10 +822,10 @@ def main():
     with concurrent.futures.ProcessPoolExecutor(max_workers=max_workers) as executor:
         df1 = run_paper1_slpa_experiment(executor, num_seeds=args.seeds, mode=args.mode, global_params=global_p, skip_email=args.skip_email)
         df2 = run_paper2_mcmoea_experiment(executor, num_seeds=args.seeds, mode=args.mode, global_params=global_p)
-        df3 = run_paper3_fccni_experiment(executor, num_seeds=args.seeds, mode=args.mode, global_params=global_p)
+        # df3 = run_paper3_fccni_experiment(executor, num_seeds=args.seeds, mode=args.mode, global_params=global_p)
         df4 = run_paper4_cetin_experiment(executor, num_seeds=args.seeds, mode=args.mode, global_params=global_p)
     
-    print("\nALL 4 PARALLELIZED STRICT PAPER COMPARATIVE BENCHMARKS COMPLETED SUCCESSFULLY.")
+    print("\nPARALLELIZED STRICT PAPER COMPARATIVE BENCHMARKS COMPLETED SUCCESSFULLY.")
 
 if __name__ == "__main__":
     main()
