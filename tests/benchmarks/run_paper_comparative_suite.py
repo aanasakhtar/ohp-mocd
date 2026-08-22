@@ -251,21 +251,22 @@ DATA_DIR = REPO_ROOT / "tests" / "benchmarks" / "data"
 DATA_DIR.mkdir(parents=True, exist_ok=True)
 
 def load_email() -> nx.Graph:
-    """Load Email-EuCore from local cache (preferred) or SNAP download."""
-    import gzip as _gzip
-    local = DATA_DIR / "email-Eu-core.txt.gz"
+    """Load Guimera & Arenas (2003) University Email Network (N=1133, E=5452, <k>=9.6).
+    Evaluated in SLPA (Xie & Szymanski 2011) Table I.
+    """
+    local = DATA_DIR / "email_arenas.txt"
     if not local.exists():
-        url = 'https://snap.stanford.edu/data/email-Eu-core.txt.gz'
+        url = 'http://deim.urv.cat/~alexandre.arenas/data/xarxes/email.zip'
         req = urllib.request.Request(url, headers=HEADERS)
-        content = urllib.request.urlopen(req, timeout=30).read()
-        local.write_bytes(content)
-    with _gzip.open(local, 'rt') as gz:
-        lines = gz.read().splitlines()
+        res = urllib.request.urlopen(req, timeout=30)
+        z = zipfile.ZipFile(io.BytesIO(res.read()))
+        content = z.read('email.txt').decode('utf-8', errors='ignore')
+        local.write_text(content, encoding='utf-8')
+    lines = local.read_text(encoding='utf-8', errors='ignore').splitlines()
     edges = []
     for line in lines:
-        if line.startswith('#'): continue
         parts = line.strip().split()
-        if len(parts) >= 2:
+        if len(parts) >= 2 and parts[0].isdigit() and parts[1].isdigit():
             edges.append((int(parts[0]), int(parts[1])))
     return nx.Graph(edges)
 
