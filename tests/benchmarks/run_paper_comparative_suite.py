@@ -677,26 +677,27 @@ def run_paper3_fccni_experiment(executor, num_seeds: int = 15, mode: str = "tune
     df.to_csv(REPO_ROOT / "tests" / "benchmarks" / "strict_paper3_fccni_eq.csv", index=False)
     print("Saved strict_paper3_fccni_eq.csv")
     
+    # Figure 3A: gNMI Ground-Truth Comparison
     fig, ax = plt.subplots(figsize=(9, 4.8))
     x = np.arange(len(df))
-    width = 0.18
+    width = 0.20
     
     ax.bar(x - 1.5*width, df["FCCNI_gNMI_max"], width, label="FCCNI Reported ($gNMI$)", color="#1f77b4", edgecolor="black")
     ax.bar(x - 0.5*width, df["SLPA_gNMI_max"], width, label="SLPA Reported ($gNMI$)", color="#e7298a", edgecolor="black")
-    ax.bar(x + 0.5*width, df["OHP_MOCD_BoundarySeeded_EQ"], width, label="OHP-MOCD BoundarySeeded (Shen EQ)", color="#1b9e77", edgecolor="black")
-    ax.bar(x + 1.5*width, df["OHP_MOCD_Crisp_EQ"], width, label="OHP-MOCD Crisp (Shen EQ)", color="#d95f02", edgecolor="black")
+    ax.bar(x + 0.5*width, df["OHP_MOCD_BoundarySeeded_gNMI"], width, label="OHP-MOCD BoundarySeeded ($gNMI$)", color="#1b9e77", edgecolor="black")
+    ax.bar(x + 1.5*width, df["OHP_MOCD_Crisp_gNMI"], width, label="OHP-MOCD Crisp ($gNMI$)", color="#d95f02", edgecolor="black")
     
     ax.set_xticks(x)
     ax.set_xticklabels(df["Dataset"])
-    ax.set_ylabel("Quality Score [0, 1]")
-    ax.set_title("Paper 3 Strict Comparison: OHP-MOCD vs. FCCNI Suite (Shen $EQ$ & $gNMI$)", fontweight="bold")
+    ax.set_ylabel("Generalized NMI ($gNMI$)")
+    ax.set_title("Paper 3 Strict Comparison: Ground-Truth Recovery ($gNMI$)", fontweight="bold")
     ax.grid(True, linestyle="--", alpha=0.4, axis="y")
     ax.legend(loc="lower right")
     
-    fig.savefig(PLOTS_DIR / "paper3_fccni_strict_eq.png", dpi=300, bbox_inches="tight")
-    fig.savefig(PLOTS_DIR / "paper3_fccni_strict_eq.pdf", bbox_inches="tight")
+    fig.savefig(PLOTS_DIR / "paper3_fccni_strict_gnmi.png", dpi=300, bbox_inches="tight")
+    fig.savefig(PLOTS_DIR / "paper3_fccni_strict_gnmi.pdf", bbox_inches="tight")
     plt.close(fig)
-    print("Saved paper3_fccni_strict_eq.png & .pdf")
+    print("Saved paper3_fccni_strict_gnmi.png & .pdf")
     return df
 
 # -----------------------------------------------------------------------------
@@ -765,6 +766,7 @@ def run_paper4_cetin_experiment(executor, num_seeds: int = 15, mode: str = "tune
     df.to_csv(REPO_ROOT / "tests" / "benchmarks" / "strict_paper4_cetin_q_coverage.csv", index=False)
     print("Saved strict_paper4_cetin_q_coverage.csv")
     
+    # Figure 4A: Shen Modularity EQ Comparison
     fig, ax = plt.subplots(figsize=(9, 4.8))
     x = np.arange(len(df))
     width = 0.20
@@ -772,19 +774,37 @@ def run_paper4_cetin_experiment(executor, num_seeds: int = 15, mode: str = "tune
     ax.bar(x - 1.5*width, df["Proposed_Cetin_Shen_Q"], width, label="Çetin 2022 Reported (Shen Q)", color="#9467bd", edgecolor="black")
     ax.bar(x - 0.5*width, df["LPANNI_Shen_Q"], width, label="LPANNI Reported (Shen Q)", color="#8c564b", edgecolor="black")
     ax.bar(x + 0.5*width, df["OHP_MOCD_BoundarySeeded_Shen_Q"], width, label="OHP-MOCD BoundarySeeded (Shen Q)", color="#1b9e77", edgecolor="black")
-    ax.bar(x + 1.5*width, df["OHP_MOCD_BoundarySeeded_Coverage"], width, label="OHP-MOCD BoundarySeeded (Coverage)", color="#bcbd22", edgecolor="black")
+    ax.bar(x + 1.5*width, df["OHP_MOCD_Crisp_Shen_Q"], width, label="OHP-MOCD Crisp (Shen Q)", color="#d95f02", edgecolor="black")
     
     ax.set_xticks(x)
     ax.set_xticklabels(df["Dataset"])
-    ax.set_ylabel("Quality Score [0, 1]")
-    ax.set_title("Paper 4 Strict Comparison: OHP-MOCD vs. Çetin & Amrahov (Shen $Q$ & Coverage)", fontweight="bold")
+    ax.set_ylabel("Shen Modularity ($EQ$)")
+    ax.set_title("Paper 4 Strict Comparison: Shen Modularity ($EQ$)", fontweight="bold")
     ax.grid(True, linestyle="--", alpha=0.4, axis="y")
     ax.legend(loc="upper right")
     
-    fig.savefig(PLOTS_DIR / "paper4_cetin_strict_q_coverage.png", dpi=300, bbox_inches="tight")
-    fig.savefig(PLOTS_DIR / "paper4_cetin_strict_q_coverage.pdf", bbox_inches="tight")
+    fig.savefig(PLOTS_DIR / "paper4_cetin_strict_shen_eq.png", dpi=300, bbox_inches="tight")
+    fig.savefig(PLOTS_DIR / "paper4_cetin_strict_shen_eq.pdf", bbox_inches="tight")
     plt.close(fig)
-    print("Saved paper4_cetin_strict_q_coverage.png & .pdf")
+    print("Saved paper4_cetin_strict_shen_eq.png & .pdf")
+    
+    # Figure 4B: Overlapping Coverage Comparison
+    fig, ax = plt.subplots(figsize=(9, 4.8))
+    ax.bar(x - width, df["Proposed_Cetin_Coverage"], width, label="Çetin 2022 Reported (Coverage)", color="#9467bd", edgecolor="black")
+    ax.bar(x, df["OHP_MOCD_BoundarySeeded_Coverage"], width, label="OHP-MOCD BoundarySeeded (Coverage)", color="#1b9e77", edgecolor="black")
+    ax.bar(x + width, df["OHP_MOCD_Crisp_Coverage"], width, label="OHP-MOCD Crisp (Coverage)", color="#d95f02", edgecolor="black")
+    
+    ax.set_xticks(x)
+    ax.set_xticklabels(df["Dataset"])
+    ax.set_ylabel("Overlapping Coverage (Formula 9)")
+    ax.set_title("Paper 4 Strict Comparison: Overlapping Coverage", fontweight="bold")
+    ax.grid(True, linestyle="--", alpha=0.4, axis="y")
+    ax.legend(loc="lower right")
+    
+    fig.savefig(PLOTS_DIR / "paper4_cetin_strict_coverage.png", dpi=300, bbox_inches="tight")
+    fig.savefig(PLOTS_DIR / "paper4_cetin_strict_coverage.pdf", bbox_inches="tight")
+    plt.close(fig)
+    print("Saved paper4_cetin_strict_coverage.png & .pdf")
     return df
 
 # -----------------------------------------------------------------------------
