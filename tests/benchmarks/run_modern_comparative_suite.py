@@ -62,8 +62,13 @@ plt.rcParams.update({
 # -----------------------------------------------------------------------------
 
 def run_ohpmocd_wrapper(G: nx.Graph, params: dict, seed: int = 42) -> list[frozenset]:
+    nodes = list(G.nodes())
+    node_map = {n: i for i, n in enumerate(nodes)}
+    rev_map = {i: n for i, n in enumerate(nodes)}
+    H = nx.relabel_nodes(G, node_map, copy=True)
+    
     part = pymocd.ohpmocd(
-        G,
+        H,
         pop_size=params.get("pop_size", 300),
         num_gens=params.get("num_gens", 350),
         cross_rate=params.get("cross_rate", 0.85),
@@ -76,21 +81,28 @@ def run_ohpmocd_wrapper(G: nx.Graph, params: dict, seed: int = 42) -> list[froze
         seed=seed
     )
     comm_dict = collections.defaultdict(set)
-    for n, c_list in part.items():
+    for n_idx, c_list in part.items():
+        orig_node = rev_map[n_idx]
         for c in (c_list if isinstance(c_list, list) else [c_list]):
-            comm_dict[c].add(n)
+            comm_dict[c].add(orig_node)
     raw_comms = list(comm_dict.values())
     merged = post_hoc_boundary_merge(G, raw_comms)
     return [frozenset(c) for c in merged if c]
 
 def run_mcmoea_wrapper(G: nx.Graph, params: dict, seed: int = 42) -> list[frozenset]:
+    nodes = list(G.nodes())
+    node_map = {n: i for i, n in enumerate(nodes)}
+    rev_map = {i: n for i, n in enumerate(nodes)}
+    H = nx.relabel_nodes(G, node_map, copy=True)
+    
     pop = params.get("pop_size", 200)
     gens = params.get("num_gens", 200)
-    part = pymocd.mcmoea(G, pop_size=pop, num_gens=gens, seed=seed)
+    part = pymocd.mcmoea(H, pop_size=pop, num_gens=gens, seed=seed)
     comm_dict = collections.defaultdict(set)
-    for n, c_list in part.items():
+    for n_idx, c_list in part.items():
+        orig_node = rev_map[n_idx]
         for c in (c_list if isinstance(c_list, list) else [c_list]):
-            comm_dict[c].add(n)
+            comm_dict[c].add(orig_node)
     return [frozenset(c) for c in comm_dict.values() if c]
 
 ALGORITHMS = {
