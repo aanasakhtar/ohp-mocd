@@ -53,7 +53,7 @@ $$\text{Keep Membership } u \in C_c \iff d_u^{in}(C_c) \ge \frac{d_u}{|M(u)|}$$
 ### 2.1 Master Metric Table 1: Shen Extended Modularity ($EQ$) — 10-Seed Average
 *Higher is better. Shen $EQ$ is the universally accepted standard metric for overlapping modularity.*
 
-| Network | $N$ | $|E|$ | LPAM (2021) | MCMOEA (2016) | NOCD (2019) | SLPA (2011) | Çetin (2022) | **OHP-MOCD** | Margin Over 2nd Place |
+| Network | Nodes ($) | Edges ($) | LPAM (2021) | MCMOEA (2016) | NOCD (2019) | SLPA (2011) | Çetin (2022) | **OHP-MOCD** | Margin Over 2nd Place |
 | :--- | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: |
 | **Karate** | 34 | 78 | 0.2646 | 0.1510 | 0.3173 | 0.3626 | 0.2228 | **0.4151** | **+14.5%** over SLPA 🏆 |
 | **Dolphins** | 62 | 159 | 0.3931 | 0.1011 | 0.4003 | 0.4481 | 0.1124 | **0.5234** | **+16.8%** over SLPA 🏆 |
