@@ -246,8 +246,12 @@ def load_celegans() -> nx.Graph:
         gml_name = [f for f in z.namelist() if f.endswith('.gml')][0]
         content = z.read(gml_name).decode('utf-8', errors='ignore')
         local_gml.write_text(content, encoding='utf-8')
-    G = nx.parse_gml(content)
-    return nx.Graph(G)
+    import re
+    edges = []
+    for match in re.finditer(r'edge\s*\[\s*source\s+(\d+)\s+target\s+(\d+)', content):
+        u, v = int(match.group(1)), int(match.group(2))
+        edges.append((u, v))
+    return nx.Graph(edges)
 
 def load_email() -> nx.Graph:
     """Authentic University Email Network (Guimera & Arenas 2003, URV Network, N=1,133, E=5,452)."""
