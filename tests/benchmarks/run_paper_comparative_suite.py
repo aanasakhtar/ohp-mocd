@@ -232,7 +232,9 @@ def load_football() -> nx.Graph:
     return load_newman_gml('football')
 
 def load_netscience() -> nx.Graph:
-    return load_newman_gml('netscience')
+    G = load_newman_gml('netscience')
+    largest_cc = max(nx.connected_components(G), key=len)
+    return G.subgraph(largest_cc).copy()
 
 def load_celegans() -> nx.Graph:
     local_gml = DATA_DIR / "celegansneural.gml"
