@@ -1,10 +1,11 @@
 # Comprehensive Research Progress & Unbiased Comparative Benchmark Report
+
 **Project:** OHP-MOCD (Overlapping Hierarchical Pareto Multi-Objective Community Detection)  
 **Baseline Snapshot:** [`clean-stochastic-ohpmocd`](https://github.com/aanasakhtar/ohp-mocd/tree/clean-stochastic-ohpmocd) (`0bd844e`)  
 **Active Development Branches:**
-- [`experiment/objective-formulations`](https://github.com/aanasakhtar/ohp-mocd/tree/experiment/objective-formulations) (Memetic Local Search Operator & Formulation Engineering)
-- [`benchmark/lfr-comparative-suite`](https://github.com/aanasakhtar/ohp-mocd/tree/benchmark/lfr-comparative-suite) (Synthetic LFR Overlapping Benchmark Protocol & Validation)
-- [`benchmark/modern-baselines-suite`](https://github.com/aanasakhtar/ohp-mocd/tree/benchmark/modern-baselines-suite) (Modern 6-Algorithm Comparative Suite: SLPA, MCMOEA, Çetin, LPAM, NOCD)
+* [`experiment/objective-formulations`](https://github.com/aanasakhtar/ohp-mocd/tree/experiment/objective-formulations) (Memetic Local Search Operator & Formulation Engineering)
+* [`benchmark/lfr-comparative-suite`](https://github.com/aanasakhtar/ohp-mocd/tree/benchmark/lfr-comparative-suite) (Synthetic LFR Overlapping Benchmark Protocol & Validation)
+* [`benchmark/modern-baselines-suite`](https://github.com/aanasakhtar/ohp-mocd/tree/benchmark/modern-baselines-suite) (Modern 6-Algorithm Comparative Suite: SLPA, MCMOEA, Çetin, LPAM, NOCD)
 
 ---
 
@@ -16,7 +17,7 @@ Since the baseline commit on `clean-stochastic-ohpmocd` (`0bd844e`), we have ach
    * Formulated an $O(|E|)$ local refinement operator grounded in Radicchi's weak community support criterion ($d_u^{in}(c) \ge d_u / |M(u)|$).
    * Prunes spurious 1-link boundary noise natively in compiled Rust with **zero additional hyperparameters**, dramatically improving cluster quality.
 2. **Resolved Dataset Ground-Truth Discrepancies:**
-   * Discovered that the SLPA paper (Xie & Szymanski 2011) evaluated on the authentic **Guimera & Arenas (2003) URV University Email Network ($N = 1,133, |E| = 5,452$)**, rather than the SNAP `email-Eu-core` ($|E|=16,706$). Replaced the loader with the authentic URV network.
+   * Discovered that the SLPA paper (Xie & Szymanski 2011) evaluated on the authentic **Guimera & Arenas (2003) URV University Email Network ($N = 1,133, |E| = 5,452$)**, rather than SNAP `email-Eu-core` ($|E|=16,706$). Replaced the loader with the authentic URV network.
    * Resolved the Les Misérables mega-hub stability dynamic (Jean Valjean hub) by optimizing boundary seeding and mutation rates.
 3. **Rigorous Methodological Audit:**
    * Removed ad-hoc surrogate baselines to ensure 100% academic integrity.
@@ -52,16 +53,16 @@ $$\text{Keep Membership } u \in C_c \iff d_u^{in}(C_c) \ge \frac{d_u}{|M(u)|}$$
 ### 2.1 Master Metric Table 1: Shen Extended Modularity ($EQ$) — 10-Seed Average
 *Higher is better. Shen $EQ$ is the universally accepted standard metric for overlapping modularity.*
 
-| Network | Nodes ($N$) | Edges ($|E|$) | LPAM (2021) | MCMOEA (2016) | NOCD (2019) | SLPA (2011) | Çetin (2022) | **OHP-MOCD (Proposed)** | Rank & Margin |
+| Network | $N$ | $|E|$ | LPAM (2021) | MCMOEA (2016) | NOCD (2019) | SLPA (2011) | Çetin (2022) | **OHP-MOCD** | Margin Over 2nd Place |
 | :--- | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: |
-| **Karate** | 34 | 78 | 0.2646 | 0.1510 | 0.3173 | 0.3626 | 0.2228 | **0.4151** | **#1 (+14.5% over 2nd)** 🏆 |
-| **Dolphins** | 62 | 159 | 0.3931 | 0.1011 | 0.4003 | 0.4481 | 0.1124 | **0.5234** | **#1 (+16.8% over 2nd)** 🏆 |
-| **Lesmis** | 77 | 254 | 0.2430 | 0.3050 | 0.4758 | 0.4936 | 0.0058 | **0.5558** | **#1 (+12.6% over 2nd)** 🏆 |
-| **Polbooks** | 105 | 441 | 0.3548 | 0.0488 | 0.3745 | 0.4763 | 0.0754 | **0.5184** | **#1 (+8.8% over 2nd)** 🏆 |
-| **Football** | 115 | 613 | 0.3701 | 0.0383 | 0.4460 | 0.5958 | 0.0633 | **0.6004** | **#1 (+0.8% over 2nd)** 🏆 |
-| **Netscience** | 379 | 914 | 0.7534 | 0.3884 | 0.7138 | 0.7766 | 0.0011 | **0.8244** | **#1 (+6.2% over 2nd)** 🏆 |
-| **Celegans** | 453 | 2,025 | 0.1823 | 0.0125 | 0.2345 | 0.1017 | -0.0000 | **0.2493** | **#1 (+6.3% over 2nd)** 🏆 |
-| **Email (URV)** | 1,133 | 5,452 | 0.3263 | 0.0437 | 0.3259 | 0.4415 | -0.0001 | **0.4623** | **#1 (+4.7% over 2nd)** 🏆 |
+| **Karate** | 34 | 78 | 0.2646 | 0.1510 | 0.3173 | 0.3626 | 0.2228 | **0.4151** | **+14.5%** over SLPA 🏆 |
+| **Dolphins** | 62 | 159 | 0.3931 | 0.1011 | 0.4003 | 0.4481 | 0.1124 | **0.5234** | **+16.8%** over SLPA 🏆 |
+| **Lesmis** | 77 | 254 | 0.2430 | 0.3050 | 0.4758 | 0.4936 | 0.0058 | **0.5558** | **+12.6%** over SLPA 🏆 |
+| **Polbooks** | 105 | 441 | 0.3548 | 0.0488 | 0.3745 | 0.4763 | 0.0754 | **0.5184** | **+8.8%** over SLPA 🏆 |
+| **Football** | 115 | 613 | 0.3701 | 0.0383 | 0.4460 | 0.5958 | 0.0633 | **0.6004** | **+0.8%** over SLPA 🏆 |
+| **Netscience** | 379 | 914 | 0.7534 | 0.3884 | 0.7138 | 0.7766 | 0.0011 | **0.8244** | **+6.2%** over SLPA 🏆 |
+| **Celegans** | 453 | 2,025 | 0.1823 | 0.0125 | 0.2345 | 0.1017 | -0.0000 | **0.2493** | **+6.3%** over NOCD 🏆 |
+| **Email (URV)** | 1,133 | 5,452 | 0.3263 | 0.0437 | 0.3259 | 0.4415 | -0.0001 | **0.4623** | **+4.7%** over SLPA 🏆 |
 
 > **Key Finding:** **OHP-MOCD achieved a 100% clean sweep victory across ALL 8 networks in Extended Modularity ($EQ$)**, demonstrating superior community partition quality regardless of graph size or density.
 
@@ -69,16 +70,16 @@ $$\text{Keep Membership } u \in C_c \iff d_u^{in}(C_c) \ge \frac{d_u}{|M(u)|}$$
 
 ### 2.2 Master Metric Table 2: Nicosia Overlapping Modularity ($Q_{ov}$) — 10-Seed Average
 
-| Network | Nodes ($N$) | LPAM (2021) | MCMOEA (2016) | NOCD (2019) | SLPA (2011) | Çetin (2022) | **OHP-MOCD (Proposed)** | Winning Algorithm |
+| Network | $N$ | LPAM (2021) | MCMOEA (2016) | NOCD (2019) | SLPA (2011) | Çetin (2022) | **OHP-MOCD** | Winning Algorithm |
 | :--- | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: |
 | **Dolphins** | 62 | 0.6493 | 0.0239 | 0.3335 | 0.7302 | 0.0126 | **0.7646** | **OHP-MOCD 🏆** |
 | **Football** | 115 | 0.5560 | 0.0010 | 0.3645 | 0.6962 | -0.0000 | **0.7004** | **OHP-MOCD 🏆** |
 | **Lesmis** | 77 | 0.5070 | 0.3256 | 0.5358 | 0.7526 | 0.0000 | **0.7583** | **OHP-MOCD 🏆** |
 | **Polbooks** | 105 | 0.6003 | 0.0018 | 0.2296 | 0.8189 | -0.0000 | **0.8380** | **OHP-MOCD 🏆** |
-| **Karate** | 34 | 0.5112 | 0.1034 | 0.3652 | **0.7189** | 0.4358 | 0.7092 | SLPA *(Runner-up: OHP-MOCD, -1.3%)* |
-| **Netscience** | 379 | **0.8730** | 0.2281 | 0.6035 | 0.8178 | 0.0022 | 0.8623 | LPAM *(Runner-up: OHP-MOCD, -1.2%)* |
-| **Celegans** | 453 | **0.4105** | -0.0000 | 0.1024 | 0.2397 | -0.0000 | 0.3789 | LPAM *(Runner-up: OHP-MOCD)* |
-| **Email (URV)**| 1,133 | 0.4043 | 0.0132 | 0.1459 | **0.5987** | -0.0001 | 0.5252 | SLPA *(Runner-up: OHP-MOCD)* |
+| **Karate** | 34 | 0.5112 | 0.1034 | 0.3652 | **0.7189** | 0.4358 | 0.7092 | SLPA *(OHP-MOCD: 2nd, -1.3%)* |
+| **Netscience** | 379 | **0.8730** | 0.2281 | 0.6035 | 0.8178 | 0.0022 | 0.8623 | LPAM *(OHP-MOCD: 2nd, -1.2%)* |
+| **Celegans** | 453 | **0.4105** | -0.0000 | 0.1024 | 0.2397 | -0.0000 | 0.3789 | LPAM *(OHP-MOCD: 2nd)* |
+| **Email (URV)** | 1,133 | 0.4043 | 0.0132 | 0.1459 | **0.5987** | -0.0001 | 0.5252 | SLPA *(OHP-MOCD: 2nd)* |
 
 ---
 
@@ -145,9 +146,9 @@ $$\text{Keep Membership } u \in C_c \iff d_u^{in}(C_c) \ge \frac{d_u}{|M(u)|}$$
 ```
 
 ### 📁 Generated Deliverables:
-- **Master Data:** `tests/benchmarks/modern_suite_master_summary.csv`
-- **Raw Seed Runs:** `tests/benchmarks/modern_suite_raw_trials.csv`
-- **Publication Figures:** `tests/benchmarks/plots/modern_comparisons/modern_algorithms_nicosia_qov.pdf` and `modern_algorithms_shen_eq.pdf`
+* **Master Data:** `tests/benchmarks/modern_suite_master_summary.csv`
+* **Raw Seed Runs:** `tests/benchmarks/modern_suite_raw_trials.csv`
+* **Publication Figures:** `tests/benchmarks/plots/modern_comparisons/modern_algorithms_nicosia_qov.pdf` and `modern_algorithms_shen_eq.pdf`
 
 ---
 *Report generated automatically for project partners and manuscript documentation.*
