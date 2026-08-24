@@ -215,7 +215,7 @@ def onmi(pred: list[frozenset], true: list[frozenset]) -> float:
             return 0.0
         return -p * np.log2(p) - (1 - p) * np.log2(1 - p)
 
-    nodes = sorted(set().union(*pred, *true))
+    nodes = list(set().union(*pred, *true))
     n = len(nodes)
     if n == 0:
         return 1.0

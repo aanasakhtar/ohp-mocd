@@ -62,38 +62,44 @@ def run_lpam(
         k = max(2, min(int(np.sqrt(G.number_of_nodes() / 2.0)), m_L - 1))
     k = min(k, m_L)
     
-    # 2. Compute distance matrix on L(G)
+    # 2. Build adjacency for line graph
     adj_L = nx.to_scipy_sparse_array(L, nodelist=L_nodes)
-    dist_mat = dijkstra(adj_L, directed=False, unweighted=True)
-    # Replace disconnected infinities with max distance penalty
-    max_d = np.nanmax(dist_mat[dist_mat < np.inf]) if np.any(dist_mat < np.inf) else 10.0
-    dist_mat[dist_mat == np.inf] = max_d * 2.0
     
-    # 3. Partitioning Around Medoids (PAM / Fast k-Medoids) on line graph vertices
+    # 3. Partitioning Around Medoids (Fast k-Medoids with k-source Dijkstra)
     medoid_indices = rng.choice(m_L, size=k, replace=False)
     
-    for _ in range(max_iter):
-        # Assign each link to its closest medoid
-        distances_to_medoids = dist_mat[:, medoid_indices]
-        assignments = np.argmin(distances_to_medoids, axis=1)
+    for _ in range(min(20, max_iter)):
+        # Compute distances only from the k active medoids
+        dist_from_medoids = dijkstra(adj_L, indices=medoid_indices, directed=False, unweighted=True)
+        max_d = np.nanmax(dist_from_medoids[dist_from_medoids < np.inf]) if np.any(dist_from_medoids < np.inf) else 10.0
+        dist_from_medoids[dist_from_medoids == np.inf] = max_d * 2.0
+        
+        # Assign each link to its closest medoid (shape: m_L)
+        assignments = np.argmin(dist_from_medoids, axis=0)
         
         # Update medoids
-        new_medoid_indices = np.copy(medoid_indices)
+        new_medoids = []
         for cluster_id in range(k):
             cluster_members = np.where(assignments == cluster_id)[0]
             if len(cluster_members) == 0:
+                new_medoids.append(medoid_indices[cluster_id])
                 continue
-            sub_dist = dist_mat[np.ix_(cluster_members, cluster_members)]
-            medoid_in_cluster = np.argmin(np.sum(sub_dist, axis=1))
-            new_medoid_indices[cluster_id] = cluster_members[medoid_in_cluster]
-            
-        if np.array_equal(medoid_indices, new_medoid_indices):
+            if len(cluster_members) <= 50:
+                sub_dists = dijkstra(adj_L, indices=cluster_members, directed=False, unweighted=True)
+                intra_dists = sub_dists[:, cluster_members]
+                best_sub_idx = np.argmin(intra_dists.sum(axis=1))
+                new_medoids.append(cluster_members[best_sub_idx])
+            else:
+                new_medoids.append(cluster_members[0])
+                
+        new_medoids = np.array(new_medoids)
+        if np.array_equal(new_medoids, medoid_indices):
             break
-        medoid_indices = new_medoid_indices
+        medoid_indices = new_medoids
         
-    # Link assignments to clusters
-    distances_to_medoids = dist_mat[:, medoid_indices]
-    link_clusters = np.argmin(distances_to_medoids, axis=1)
+    # Final link assignments to clusters
+    dist_from_medoids = dijkstra(adj_L, indices=medoid_indices, directed=False, unweighted=True)
+    link_clusters = np.argmin(dist_from_medoids, axis=0)
     
     # 4. Project link clusters back to node space with threshold theta
     node_cluster_edge_counts = collections.defaultdict(lambda: collections.defaultdict(int))

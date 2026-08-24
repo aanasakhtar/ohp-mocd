@@ -9,5 +9,9 @@ baselines package — Authentic Published Baseline Algorithms:
 
 from tests.benchmarks.baselines.slpa import run_slpa
 from tests.benchmarks.baselines.lpam import run_lpam
-from tests.benchmarks.baselines.nocd import run_nocd
 from tests.benchmarks.baselines.cetin import run_cetin
+
+try:
+    from tests.benchmarks.baselines.nocd import run_nocd
+except Exception:
+    run_nocd = None

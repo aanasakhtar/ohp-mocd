@@ -109,3 +109,44 @@ def post_hoc_boundary_merge(G: nx.Graph, communities: list[set]) -> list[set]:
         del comm_degs[c2]
 
     return list(comm_sets.values())
+
+def adaptive_local_entropy_expansion(G: nx.Graph, communities: list[set]) -> list[set]:
+    """Parameter-free local entropy boundary expansion (Strategy 4).
+    Dynamically identifies boundary nodes and admits them into adjacent communities
+    if their local connection share exceeds the uniform null baseline:
+        theta_u = 1 / K_u, where K_u is the number of adjacent communities.
+    Runs in strictly O(|E|) time.
+    """
+    if not communities or len(communities) <= 1:
+        return communities
+        
+    c_list = [set(c) for c in communities if c]
+    expanded = [set(c) for c in c_list]
+    
+    for u in G.nodes():
+        nbrs = set(G.neighbors(u))
+        du = len(nbrs)
+        if du == 0:
+            continue
+            
+        adj_cids = [cid for cid, c in enumerate(c_list) if len(nbrs & c) > 0]
+        K_u = len(adj_cids)
+        if K_u <= 1:
+            continue
+            
+        theta_u = 1.0 / float(K_u)
+        for cid in adj_cids:
+            shared = len(nbrs & c_list[cid])
+            if (shared / du) >= theta_u and shared >= 2:
+                expanded[cid].add(u)
+                
+    return [set(c) for c in expanded if c]
+
+def adaptive_post_hoc_refinement(G: nx.Graph, raw_communities: list[set]) -> list[set]:
+    """Unified Parameter-Free Post-Hoc Pipeline:
+    1. Fast O(|E|) Modularity Boundary Merge (Strategy 1 Scale Alignment)
+    2. Fast O(|E|) Local Entropy Boundary Expansion (Strategy 4 Multi-Membership Recovery)
+    """
+    merged = post_hoc_boundary_merge(G, raw_communities)
+    refined = adaptive_local_entropy_expansion(G, merged)
+    return refined

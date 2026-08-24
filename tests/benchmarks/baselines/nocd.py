@@ -20,7 +20,7 @@ try:
     import torch.nn.functional as F
     import torch.optim as optim
     HAS_TORCH = True
-except ImportError:
+except (ImportError, OSError, Exception):
     HAS_TORCH = False
 
 def normalize_adjacency(adj: sp.csr_matrix) -> sp.csr_matrix:

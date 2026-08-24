@@ -38,7 +38,7 @@ if str(REPO_ROOT) not in sys.path:
 
 import pymocd
 from evaluation.metrics import onmi, pairwise_f1
-from tests.benchmarks.utils.merge import post_hoc_boundary_merge
+from tests.benchmarks.utils.merge import post_hoc_boundary_merge, adaptive_post_hoc_refinement
 
 DATA_DIR = REPO_ROOT / "data"
 BENCH_DIR = REPO_ROOT / "tests" / "benchmarks"
@@ -375,17 +375,27 @@ def get_params_for_dataset(net_name: str, mode: str, global_params: dict = None)
     })
 
 # -----------------------------------------------------------------------------
-# Worker Evaluation Function
+# Evaluation Pipeline
 # -----------------------------------------------------------------------------
 
-def evaluate_single_seed_run(task_tuple: tuple) -> dict:
-    net_name, init_strategy, edge_list, gt, seed_val, pop_size, num_gens, cross_rate, mut_rate, init_overlap_prob = task_tuple
-        
-    G = nx.Graph(edge_list)
+def run_ohpmocd_single(
+    G: nx.Graph,
+    net_name: str,
+    init_strategy: str,
+    params: dict,
+    seed_val: int,
+    gt: list[frozenset] = None,
+) -> dict:
     nodes = list(G.nodes())
     node_map = {n: i for i, n in enumerate(nodes)}
     rev_map = {i: n for i, n in enumerate(nodes)}
     H = nx.relabel_nodes(G, node_map, copy=True)
+    
+    pop_size = params.get("pop_size", 300)
+    num_gens = params.get("num_gens", 350)
+    cross_rate = params.get("cross_rate", 0.85)
+    mut_rate = params.get("mut_rate", 0.30)
+    init_overlap_prob = params.get("init_overlap_prob", 0.08) if init_strategy != "crisp" else 0.0
     
     t0 = time.perf_counter()
     dict_res = pymocd.ohpmocd(
@@ -409,7 +419,7 @@ def evaluate_single_seed_run(task_tuple: tuple) -> dict:
             comm_dict[cid].add(orig_node)
     raw_comms = list(comm_dict.values())
     
-    comms = post_hoc_boundary_merge(G, raw_comms)
+    comms = adaptive_post_hoc_refinement(G, raw_comms)
     comm_frozensets = [frozenset(c) for c in comms if c]
     
     qov = nicosia_qov_slpa(G, comms)
@@ -434,6 +444,18 @@ def evaluate_single_seed_run(task_tuple: tuple) -> dict:
         "F1": float(f1_val),
         "Time": float(dur),
     }
+
+def evaluate_single_seed_run(task_tuple: tuple) -> dict:
+    net_name, init_strategy, edge_list, gt, seed_val, pop_size, num_gens, cross_rate, mut_rate, init_overlap_prob = task_tuple
+    G = nx.Graph(edge_list)
+    params = {
+        "pop_size": pop_size,
+        "num_gens": num_gens,
+        "cross_rate": cross_rate,
+        "mut_rate": mut_rate,
+        "init_overlap_prob": init_overlap_prob,
+    }
+    return run_ohpmocd_single(G, net_name, init_strategy, params, seed_val, gt=gt)
 
 def run_ohpmocd_variant_parallel(
     G: nx.Graph, 
