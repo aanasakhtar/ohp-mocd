@@ -748,12 +748,13 @@ def main():
     parser.add_argument("--cross", type=float, default=0.85)
     parser.add_argument("--mut", type=float, default=0.30)
     parser.add_argument("--init_prob", type=float, default=0.08)
+    parser.add_argument("--paper", type=str, choices=["all", "slpa", "mcmoea", "cetin", "lpam", "nocd"], default="all", help="Target specific baseline paper (default: all)")
     parser.add_argument("--skip_email", action="store_true")
     args = parser.parse_args()
     
     print("=================================================================")
     print(" STARTING STRICT LITERATURE-REPORTED PAPER BENCHMARK SUITE ")
-    print(" 5 Baseline Papers: SLPA (2011), MCMOEA (2016), Çetin (2022), LPAM (2021), NOCD (2019)")
+    print(f" Target Baseline Paper(s): {args.paper.upper()}")
     print(f" Mode: {args.mode.upper()} | Seeds: {args.seeds} | Skip Email: {args.skip_email}")
     print("=================================================================")
     
@@ -769,13 +770,18 @@ def main():
     print(f"Executing with ProcessPoolExecutor (max_workers = {max_workers})...\n")
     
     with concurrent.futures.ProcessPoolExecutor(max_workers=max_workers) as executor:
-        df1 = run_paper1_slpa_experiment(executor, num_seeds=args.seeds, mode=args.mode, global_params=global_p, skip_email=args.skip_email)
-        df2 = run_paper2_mcmoea_experiment(executor, num_seeds=args.seeds, mode=args.mode, global_params=global_p)
-        df3 = run_paper3_cetin_experiment(executor, num_seeds=args.seeds, mode=args.mode, global_params=global_p)
-        df4 = run_paper4_lpam_experiment(executor, num_seeds=args.seeds, mode=args.mode, global_params=global_p)
-        df5 = run_paper5_nocd_experiment(executor, num_seeds=min(10, args.seeds), mode=args.mode, global_params=global_p)
+        if args.paper in ("all", "slpa"):
+            df1 = run_paper1_slpa_experiment(executor, num_seeds=args.seeds, mode=args.mode, global_params=global_p, skip_email=args.skip_email)
+        if args.paper in ("all", "mcmoea"):
+            df2 = run_paper2_mcmoea_experiment(executor, num_seeds=args.seeds, mode=args.mode, global_params=global_p)
+        if args.paper in ("all", "cetin"):
+            df3 = run_paper3_cetin_experiment(executor, num_seeds=args.seeds, mode=args.mode, global_params=global_p)
+        if args.paper in ("all", "lpam"):
+            df4 = run_paper4_lpam_experiment(executor, num_seeds=args.seeds, mode=args.mode, global_params=global_p)
+        if args.paper in ("all", "nocd"):
+            df5 = run_paper5_nocd_experiment(executor, num_seeds=min(10, args.seeds), mode=args.mode, global_params=global_p)
     
-    print("\nALL 5 STRICT LITERATURE BENCHMARKS COMPLETED SUCCESSFULLY.")
+    print("\nBENCHMARK RUN COMPLETED SUCCESSFULLY.")
 
 if __name__ == "__main__":
     main()
