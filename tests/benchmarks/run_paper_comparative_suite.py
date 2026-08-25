@@ -457,6 +457,8 @@ def evaluate_single_seed_run(task_tuple: tuple) -> dict:
     }
     return run_ohpmocd_single(G, net_name, init_strategy, params, seed_val, gt=gt)
 
+RESULTS_CACHE: dict = {}
+
 def run_ohpmocd_variant_parallel(
     G: nx.Graph, 
     net_name: str, 
@@ -470,6 +472,11 @@ def run_ohpmocd_variant_parallel(
     mut_rate: float = 0.30,
     init_overlap_prob: float = 0.08
 ) -> dict:
+    cache_key = (net_name, init_strategy, num_trials, pop_size, num_gens, cross_rate, mut_rate, init_overlap_prob)
+    if cache_key in RESULTS_CACHE:
+        print(f"      [CACHE HIT: Reusing precomputed trials for {net_name} ({init_strategy})]")
+        return RESULTS_CACHE[cache_key]
+        
     edge_list = list(G.edges())
     gt_obj = gt if gt is not None else extract_ground_truth(G, net_name)
     
@@ -487,7 +494,7 @@ def run_ohpmocd_variant_parallel(
     f1s = [r["F1"] for r in results]
     times = [r["Time"] for r in results]
     
-    return {
+    res = {
         "Qov_mean": float(np.mean(qovs)),
         "Qov_std": float(np.std(qovs)),
         "Qov_peak": float(np.max(qovs)),
@@ -503,6 +510,8 @@ def run_ohpmocd_variant_parallel(
         "F1_peak": float(np.max(f1s)),
         "Time_mean": float(np.mean(times)),
     }
+    RESULTS_CACHE[cache_key] = res
+    return res
 
 # -----------------------------------------------------------------------------
 # Paper 1: SLPA (2011) — Nicosia Qov
