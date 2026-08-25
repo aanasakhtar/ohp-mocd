@@ -145,28 +145,45 @@ def modularity(G: nx.Graph, communities: list[frozenset]) -> float:
 
 def pairwise_f1(pred: list[frozenset], true: list[frozenset]) -> float:
     """
-    Pairwise F1 score (paper Section 5.1.1).
-    Computes exact true positive pairs via community intersections with O(1) memory footprint.
+    Pairwise F1 score for overlapping community detection.
+    Computes exact unique true positive co-occurring pairs:
+      P_pred = {(u, v) : u, v in same predicted community, u < v}
+      P_true = {(u, v) : u, v in same ground-truth community, u < v}
+      Precision = |P_pred & P_true| / |P_pred|
+      Recall = |P_pred & P_true| / |P_true|
+      F1 = 2 * Precision * Recall / (Precision + Recall) in [0.0, 1.0].
     """
-    n_pred_pairs = sum(len(c) * (len(c) - 1) // 2 for c in pred)
-    n_true_pairs = sum(len(c) * (len(c) - 1) // 2 for c in true)
-
-    if n_pred_pairs == 0 or n_true_pairs == 0:
+    pred_pairs = set()
+    for c in pred:
+        c_list = sorted(list(c), key=lambda x: str(x))
+        for i in range(len(c_list)):
+            u = c_list[i]
+            for j in range(i + 1, len(c_list)):
+                v = c_list[j]
+                pred_pairs.add((u, v))
+                
+    true_pairs = set()
+    for c in true:
+        c_list = sorted(list(c), key=lambda x: str(x))
+        for i in range(len(c_list)):
+            u = c_list[i]
+            for j in range(i + 1, len(c_list)):
+                v = c_list[j]
+                true_pairs.add((u, v))
+                
+    if not pred_pairs or not true_pairs:
         return 0.0
-
-    tp = 0
-    for cp in pred:
-        for ct in true:
-            k = len(cp & ct)
-            if k >= 2:
-                tp += k * (k - 1) // 2
-
-    precision = tp / n_pred_pairs
-    recall = tp / n_true_pairs
-
+        
+    tp = len(pred_pairs & true_pairs)
+    if tp == 0:
+        return 0.0
+        
+    precision = tp / len(pred_pairs)
+    recall = tp / len(true_pairs)
+    
     if precision + recall == 0:
         return 0.0
-    return 2 * precision * recall / (precision + recall)
+    return 2.0 * precision * recall / (precision + recall)
 
 
 def omega_index(pred: list[frozenset], true: list[frozenset]) -> float:
