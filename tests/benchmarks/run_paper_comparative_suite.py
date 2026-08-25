@@ -362,7 +362,7 @@ DATASET_TUNED_PARAMS = {
     "Facebook 348": {"pop_size": 300, "num_gens": 350, "cross_rate": 0.85, "mut_rate": 0.30, "init_overlap_prob": 0.10},
     "Facebook 414": {"pop_size": 300, "num_gens": 350, "cross_rate": 0.85, "mut_rate": 0.30, "init_overlap_prob": 0.10},
     "Facebook 686": {"pop_size": 300, "num_gens": 350, "cross_rate": 0.85, "mut_rate": 0.30, "init_overlap_prob": 0.10},
-    "Facebook 698": {"pop_size": 200, "num_gens": 250, "cross_rate": 0.85, "mut_rate": 0.30, "init_overlap_prob": 0.10},
+    "Facebook 698": {"pop_size": 300, "num_gens": 350, "cross_rate": 0.85, "mut_rate": 0.30, "init_overlap_prob": 0.10},
     "Facebook 1684": {"pop_size": 400, "num_gens": 400, "cross_rate": 0.85, "mut_rate": 0.30, "init_overlap_prob": 0.08},
     "Facebook 1912": {"pop_size": 400, "num_gens": 400, "cross_rate": 0.85, "mut_rate": 0.30, "init_overlap_prob": 0.08},
 }
