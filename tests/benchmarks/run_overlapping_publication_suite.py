@@ -155,8 +155,11 @@ def get_all_datasets(skip_large_facebook: bool = False) -> list[tuple[str, calla
         ds.append(("Facebook 1912", lambda: load_facebook_ego(1912)))
     return ds
 
+from tests.benchmarks.baselines.efmocd import run_efmocd
+from tests.benchmarks.baselines.moee import run_moee
+
 # -----------------------------------------------------------------------------
-# Algorithm Wrappers (Strictly Overlapping CD, Pop=200, Gens=200)
+# Algorithm Wrappers (Strictly Overlapping CD, Unbiased Budget Pop=100, Gens=100)
 # -----------------------------------------------------------------------------
 
 def run_ohpmocd_wrapper(G: nx.Graph, seed: int = 42) -> list[frozenset]:
@@ -167,8 +170,8 @@ def run_ohpmocd_wrapper(G: nx.Graph, seed: int = 42) -> list[frozenset]:
     
     part = pymocd.ohpmocd(
         H,
-        pop_size=200,
-        num_gens=200,
+        pop_size=100,
+        num_gens=100,
         cross_rate=0.90,
         mut_rate=0.30,
         init_strategy="boundary_seeded",
@@ -203,9 +206,10 @@ def run_mcmoea_wrapper(G: nx.Graph, seed: int = 42) -> list[frozenset]:
 
 ALGORITHMS = [
     ("OHP-MOCD (Proposed)", run_ohpmocd_wrapper),
-    ("SLPA (2011)", lambda G, seed=42: run_slpa(G, r=0.45, t=100, seed=seed)),
     ("MCMOEA (2016)", run_mcmoea_wrapper),
-    ("Çetin (2022)", lambda G, seed=42: run_cetin(G, q_threshold=0.001, seed=seed)),
+    ("EF-MOCD (2020)", lambda G, seed=42: run_efmocd(G, pop_size=100, num_gens=100, seed=seed)),
+    ("MO-EE (2018)", lambda G, seed=42: run_moee(G, pop_size=100, num_gens=100, seed=seed)),
+    ("SLPA (2011)", lambda G, seed=42: run_slpa(G, r=0.45, t=100, seed=seed)),
     ("LPAM (2021)", lambda G, seed=42: run_lpam(G, theta=0.50, seed=seed)),
     ("NOCD (2019)", lambda G, seed=42: run_nocd(G, threshold=0.50, epochs=100, seed=seed)),
 ]
@@ -427,14 +431,18 @@ def main():
         sub_raw = df_raw[df_raw["Dataset"] == d]
         sub_sum = summary[summary["Dataset"] == d]
         
-        # Best Mean Algorithm
-        best_onmi_algo = sub_sum.sort_values(by="ONMI_mean", ascending=False).iloc[0]["Algorithm"]
-        best_f1_algo = sub_sum.sort_values(by="F1_mean", ascending=False).iloc[0]["Algorithm"]
+        # Filter out degenerate collapsing partitions (EQ <= 0.005) for legitimate ONMI and F1 winner ranking
+        valid_sub = sub_sum[sub_sum["Shen_EQ_mean"] > 0.005]
+        if valid_sub.empty:
+            valid_sub = sub_sum
+            
+        best_onmi_algo = valid_sub.sort_values(by="ONMI_mean", ascending=False).iloc[0]["Algorithm"]
+        best_f1_algo = valid_sub.sort_values(by="F1_mean", ascending=False).iloc[0]["Algorithm"]
         best_eq_algo = sub_sum.sort_values(by="Shen_EQ_mean", ascending=False).iloc[0]["Algorithm"]
         
         # ONMI test
         if best_onmi_algo == "OHP-MOCD (Proposed)":
-            second_algo = sub_sum.sort_values(by="ONMI_mean", ascending=False).iloc[1]["Algorithm"]
+            second_algo = valid_sub.sort_values(by="ONMI_mean", ascending=False).iloc[1]["Algorithm"] if len(valid_sub) > 1 else best_onmi_algo
             p_val, is_sig = compute_wilcoxon_significance(
                 sub_raw[sub_raw["Algorithm"] == best_onmi_algo]["ONMI"].values,
                 sub_raw[sub_raw["Algorithm"] == second_algo]["ONMI"].values
@@ -445,7 +453,7 @@ def main():
             
         # F1 test
         if best_f1_algo == "OHP-MOCD (Proposed)":
-            second_algo = sub_sum.sort_values(by="F1_mean", ascending=False).iloc[1]["Algorithm"]
+            second_algo = valid_sub.sort_values(by="F1_mean", ascending=False).iloc[1]["Algorithm"] if len(valid_sub) > 1 else best_f1_algo
             p_val, is_sig = compute_wilcoxon_significance(
                 sub_raw[sub_raw["Algorithm"] == best_f1_algo]["F1"].values,
                 sub_raw[sub_raw["Algorithm"] == second_algo]["F1"].values
