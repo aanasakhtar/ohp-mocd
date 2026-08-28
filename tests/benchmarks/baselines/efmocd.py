@@ -8,17 +8,17 @@ Reference:
   IEEE Transactions on Fuzzy Systems, Vol. 28, No. 11, pp. 2841-2855, 2020.
   DOI: 10.1109/TFUZZ.2019.2945241
 
-Exact 2-Stage Algorithm Implementation:
+Exact 2-Stage Algorithm Implementation with BLAS Matrix Vectorization:
   Stage 1 (Center Optimization):
     - Representation: Binary vector b in {0, 1}^n indicating central nodes (CN).
     - Objective 1: Kernel k-means (KKM) = 2(n - k) - sum( 2*e(Ci) / |Ci| ) [Minimize]
     - Objective 2: Ratio Cut (RC) = sum( cut(Ci, V \ Ci) / |Ci| ) [Minimize]
   Stage 2 (Fuzzy Threshold Optimization):
-    - Subpopulation initialization: k-means clustering on fuzzy membership matrix U.
+    - Subpopulation initialization: 2-means clustering on membership matrix U.
     - Representation: Continuous threshold vector r in [0, 1]^n for non-central nodes.
     - Membership: U_ij = 1 / sum( (dist(NC_i, CN_j) / dist(NC_i, CN_l))^(2/(m-1)) )
     - Community assignment: NC_i in C_j iff U_ij >= r_i (with fallback to argmax).
-    - Objective 1: Extended Modularity Q_ov (EQ) [Maximize]
+    - Objective 1: Extended Modularity Q_ov (EQ) [Maximize via BLAS matrix algebra]
     - Objective 2: Number of Overlapping Nodes (ON) [Maximize]
 """
 
@@ -107,44 +107,28 @@ def evaluate_stage1_kkm_rc(H: nx.Graph, dist_matrix: np.ndarray, central_nodes: 
     kkm = 2.0 * (n - k_actual) - kkm_sum
     return float(kkm), float(rc_sum), comm_list
 
-def evaluate_stage2_qov_on(H: nx.Graph, two_m: float, overlapping_comms: list[set[int]]) -> tuple[float, float]:
-    """Calculates Stage 2 objectives: Extended Modularity (Q_ov / EQ) and Overlapping Nodes (ON)."""
-    n = H.number_of_nodes()
-    valid_comms = [c for c in overlapping_comms if len(c) > 0]
-    if not valid_comms:
-        return -1.0, 0.0
-        
-    # Multi-membership count for each node
-    membership_counts = np.zeros(n, dtype=np.int32)
-    for c in valid_comms:
-        for u in c:
-            membership_counts[u] += 1
-            
-    on_count = float(np.sum(membership_counts > 1))
+def evaluate_stage2_qov_on_vec(A: np.ndarray, degs: np.ndarray, two_m: float, S: np.ndarray) -> tuple[float, float]:
+    """Vectorized calculation of Stage 2 objectives (EQ and ON) via BLAS matrix operations."""
+    # S has shape (n, k) with binary indicator of membership
+    O = np.sum(S, axis=1)  # Multi-membership count O_u
+    on_count = float(np.sum(O > 1.0))
     
-    # Extended modularity Q_ov (Equation 18)
-    q_ov = 0.0
-    for c in valid_comms:
-        c_list = list(c)
-        for i in range(len(c_list)):
-            u = c_list[i]
-            d_u = H.degree(u)
-            o_u = max(1, membership_counts[u])
-            for j in range(i, len(c_list)):
-                v = c_list[j]
-                d_v = H.degree(v)
-                o_v = max(1, membership_counts[v])
-                
-                a_uv = 1.0 if H.has_edge(u, v) else 0.0
-                coeff = 1.0 if i == j else 2.0
-                
-                val = (a_uv / two_m) - ((d_u * d_v) / (two_m ** 2.0))
-                q_ov += coeff * (val / (o_u * o_v))
-                
-    return float(q_ov), on_count
+    O_inv = np.where(O > 0, 1.0 / O, 0.0)
+    W = S * O_inv[:, None]  # Shape (n, k)
+    
+    # Term 1: (1 / 2M) * sum_k (W[:, k]^T A W[:, k])
+    AW = A @ W
+    term1 = np.sum(W * AW) / two_m
+    
+    # Term 2: (1 / (2M)^2) * sum_k (W[:, k]^T d)^2
+    vol_k = degs @ W
+    term2 = np.sum(vol_k ** 2.0) / (two_m ** 2.0)
+    
+    q_ov = float(term1 - term2)
+    return q_ov, on_count
 
 def run_efmocd(G: nx.Graph, pop_size: int = 100, num_gens: int = 100, seed: int = 42) -> list[frozenset]:
-    """Executes the exact 2-Stage EMOFM / EF-MOCD Algorithm (Tian et al., IEEE TFS 2020)."""
+    """Executes the exact 2-Stage EMOFM / EF-MOCD Algorithm (Tian et al., IEEE TFS 2020) at C-speed."""
     random.seed(seed)
     np.random.seed(seed)
     
@@ -163,6 +147,8 @@ def run_efmocd(G: nx.Graph, pop_size: int = 100, num_gens: int = 100, seed: int 
         return [frozenset([n]) for n in nodes]
     two_m = max(1.0, 2.0 * m_edges)
     
+    A = nx.to_numpy_array(H, weight=None, dtype=np.float64)
+    degs = np.array([H.degree(i) for i in range(n)], dtype=np.float64)
     dist_matrix = compute_all_pairs_distances(H)
     
     # -------------------------------------------------------------------------
@@ -193,7 +179,6 @@ def run_efmocd(G: nx.Graph, pop_size: int = 100, num_gens: int = 100, seed: int 
         for b in stage1_pop:
             centers = [i for i in range(n) if b[i] == 1]
             if len(centers) < 2:
-                # Ensure at least 2 centers
                 rand_picks = random.sample(range(n), 2)
                 b[rand_picks[0]] = 1
                 b[rand_picks[1]] = 1
@@ -207,7 +192,6 @@ def run_efmocd(G: nx.Graph, pop_size: int = 100, num_gens: int = 100, seed: int 
                 best_stage1_val = combined_score
                 best_stage1_sol = np.copy(b)
                 
-        # Pareto-like truncation selection on (KKM, RC)
         evals.sort(key=lambda x: (x[0] + x[1]))
         elite = [x[2] for x in evals[:max(2, pop_size // 4)]]
         
@@ -215,14 +199,11 @@ def run_efmocd(G: nx.Graph, pop_size: int = 100, num_gens: int = 100, seed: int 
         while len(next_pop) < pop_size:
             p1 = random.choice(elite)
             p2 = random.choice(elite)
-            # Uniform crossover on binary vector
             mask = np.random.rand(n) < 0.5
             child = np.where(mask, p1, p2)
-            # Bitwise mutation with p_m = 1/n
             mut_mask = np.random.rand(n) < (1.0 / float(n))
             child[mut_mask] = 1 - child[mut_mask]
             
-            # Bound number of centers
             num_c = np.sum(child)
             if num_c < k_min:
                 add_idx = random.sample(range(n), k_min - num_c)
@@ -261,46 +242,39 @@ def run_efmocd(G: nx.Graph, pop_size: int = 100, num_gens: int = 100, seed: int 
         else:
             init_r[u] = 0.5
             
-    # Generate Stage 2 subpopulation
     stage2_pop = []
     for _ in range(pop_size):
         r_vec = np.copy(init_r)
-        # Random perturbation with probability 0.5 (Algorithm 4, Lines 12-15)
         perturb_mask = np.random.rand(n) < 0.5
         r_vec[perturb_mask] = np.random.rand(np.sum(perturb_mask))
         stage2_pop.append(r_vec)
         
-    best_comms = None
+    best_S = None
     best_qov = -1e9
     
     for gen in range(gen_stage2):
         evals = []
         for r_vec in stage2_pop:
-            # Decode overlapping communities (Eq. 9)
-            comms = collections.defaultdict(set)
-            # Add central nodes to their respective communities
+            # Fast vectorized decoding of membership matrix S (n, k_centers)
+            S = (U >= r_vec[:, None]).astype(np.float64)
+            # Ensure central nodes belong to their community
             for j, c_node in enumerate(best_central_nodes):
-                comms[j].add(c_node)
+                S[c_node, j] = 1.0
                 
-            for u in range(n):
-                assigned = False
-                for j in range(k_centers):
-                    if U[u, j] >= r_vec[u]:
-                        comms[j].add(u)
-                        assigned = True
-                if not assigned:
-                    best_j = int(np.argmax(U[u, :]))
-                    comms[best_j].add(u)
+            # Fallback for unassigned nodes
+            unassigned = (np.sum(S, axis=1) == 0)
+            if np.any(unassigned):
+                best_j_indices = np.argmax(U[unassigned, :], axis=1)
+                for unassigned_idx, best_j in zip(np.where(unassigned)[0], best_j_indices):
+                    S[unassigned_idx, best_j] = 1.0
                     
-            comm_sets = [c for c in comms.values() if len(c) > 0]
-            q_ov, on_count = evaluate_stage2_qov_on(H, two_m, comm_sets)
-            evals.append((q_ov, on_count, r_vec, comm_sets))
+            q_ov, on_count = evaluate_stage2_qov_on_vec(A, degs, two_m, S)
+            evals.append((q_ov, on_count, r_vec, S))
             
             if q_ov > best_qov:
                 best_qov = q_ov
-                best_comms = comm_sets
+                best_S = S
                 
-        # Pareto selection maximizing Qov and ON
         evals.sort(key=lambda x: (x[0] + 0.01 * x[1]), reverse=True)
         elite = [x[2] for x in evals[:max(2, pop_size // 4)]]
         
@@ -308,18 +282,22 @@ def run_efmocd(G: nx.Graph, pop_size: int = 100, num_gens: int = 100, seed: int 
         while len(next_pop) < pop_size:
             p1 = random.choice(elite)
             p2 = random.choice(elite)
-            # Simulated Binary Crossover (SBX)
             beta = np.random.rand(n)
             child = 0.5 * ((1.0 + beta) * p1 + (1.0 - beta) * p2)
-            # Polynomial mutation
             mut_mask = np.random.rand(n) < (1.0 / float(n))
             delta = np.random.uniform(-0.1, 0.1, size=n)
             child[mut_mask] = np.clip(child[mut_mask] + delta[mut_mask], 0.0, 1.0)
             next_pop.append(child)
         stage2_pop = next_pop
         
-    if best_comms is None:
-        # Fallback to disjoint assignment from stage 1
-        _, _, best_comms = evaluate_stage1_kkm_rc(H, dist_matrix, best_central_nodes)
+    if best_S is None:
+        best_S = (U >= init_r[:, None]).astype(np.float64)
         
-    return [frozenset(rev_map[i] for i in c) for c in best_comms if len(c) > 0]
+    # Project binary membership matrix S into communities
+    comms = collections.defaultdict(set)
+    for u in range(n):
+        for j in range(k_centers):
+            if best_S[u, j] > 0.5:
+                comms[j].add(rev_map[u])
+                
+    return [frozenset(c) for c in comms.values() if len(c) > 0]
