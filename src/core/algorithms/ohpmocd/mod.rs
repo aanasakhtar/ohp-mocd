@@ -406,6 +406,8 @@ mod tests {
                     &g,
                     &degrees,
                     false,
+                    "default",
+                    None,
                 );
                 Ok::<(), ()>(())
             },
@@ -451,6 +453,8 @@ mod tests {
                         &g,
                         &degrees,
                         false,
+                        "default",
+                        None,
                     );
                     Ok::<(), ()>(())
                 },
