@@ -57,8 +57,8 @@
 \title{OHP-MOCD: Overlapping Community Detection via an Evolutionary Multi-Objective Extension of HP-MOCD}
 \titlerunning{OHP-MOCD for Overlapping Community Detection}
 
-\author{Muhammad Anas \and Manahil Jamil \and Aneeza Khan}
-\authorrunning{M. Anas, M. Jamil, and A. Khan}
+\author{Muhammad Anas \and Aneeza Khan \and Manahil Jamil \and Syeda Saleha Raza}
+\authorrunning{M. Anas, A. Khan, M. Jamil, and S. S. Raza}
 
 \institute{Department of Computer Science, Habib University, Karachi, Pakistan\\
 \url{https://github.com/aanasakhtar/ohp-mocd}}
@@ -66,7 +66,7 @@
 \maketitle
 
 \begin{abstract}
-Overlapping community detection is essential in complex networks where vertices naturally participate in multiple functional modules, yet designing scalable evolutionary multi-objective algorithms (MOEAs) for overlapping structures remains a major challenge. While the recently proposed HP-MOCD framework achieves breakthrough computational efficiency for crisp community detection, its discrete locus-based encoding strictly constrains each vertex to a single cluster, precluding multi-membership boundaries. We propose \textbf{OHP-MOCD}, which extends HP-MOCD to overlapping covers via a direct node-to-memberships chromosome, a tri-objective NSGA-II formulation optimizing decomposed modularity alongside overlap parsimony regularization, and an analytically derived, parameter-free statistical boundary bound based on the Central Limit Theorem. We systematically evaluate OHP-MOCD against six competitive baselines across four distinct algorithmic paradigms on 12 real-world ground-truth networks and synthetic LFR benchmark sweeps ($\mu \in [0.1, 0.6]$). Empirical results demonstrate that OHP-MOCD achieves the highest mean Overlapping NMI on 10 of the 12 real-world networks within the evolutionary paradigm and secures top modularity on dense social topologies, while executing up to $27.5\times$ faster than competing evolutionary methods.
+Overlapping community detection is essential in complex networks where vertices naturally participate in multiple functional modules, yet designing scalable evolutionary multi-objective algorithms (MOEAs) for overlapping structures remains a major challenge. While the recently proposed HP-MOCD framework achieves breakthrough computational efficiency for crisp community detection, its discrete locus-based encoding strictly constrains each vertex to a single cluster. To overcome this limitation, we propose \textbf{OHP-MOCD}, which extends HP-MOCD to overlapping covers via a direct node-to-memberships chromosome. The framework introduces a tri-objective formulation optimized using the Non-dominated Sorting Genetic Algorithm II (NSGA-II), balancing decomposed modularity with an overlap parsimony regularizer. Additionally, OHP-MOCD incorporates an analytically derived, parameter-free statistical boundary bound based on the Central Limit Theorem to govern multi-membership admission. We systematically evaluate OHP-MOCD against six competitive baselines across four distinct algorithmic paradigms on 12 real-world ground-truth networks and synthetic LFR benchmark sweeps ($\mu \in [0.1, 0.6]$). Empirical results demonstrate that OHP-MOCD achieves the highest mean Overlapping NMI on 10 of the 12 real-world networks within the evolutionary paradigm and secures top modularity on dense social topologies, while executing up to $27.5\times$ faster than competing evolutionary methods.
 \end{abstract}
 
 \keywords{Overlapping Community Detection, Evolutionary Multi-Objective Optimization, NSGA-II, Modularity Decomposition, Complex Networks, Graph Mining}
@@ -78,7 +78,7 @@ In real-world networks, community overlap is a ubiquitous structural property ra
 
 Evolutionary multi-objective algorithms (MOEAs) are particularly well suited to community detection because the structural quality of a community partition cannot be adequately captured by a single scalar metric \cite{pizzuti2012,deb2002}. A high-quality overlapping cover must simultaneously encourage strong intra-community cohesion, minimize inter-community mixing, and prevent spurious overlap bloat. Collapsing these conflicting structural criteria into a single scalar objective requires fixed trade-off hyperparameters that introduce human bias. Multi-objective optimization resolves this by maintaining a Pareto front of non-dominated candidate covers representing diverse topological trade-offs.
 
-Recently, Santos et al.~\cite{santos2025} introduced \textbf{HP-MOCD} (\textit{High-Performance Evolutionary Multi-Objective Community Detection}), achieving breakthrough computational scalability for disjoint community detection by decomposing Newman's modularity into two competing objectives optimized via NSGA-II. However, HP-MOCD relies strictly on a discrete Locus-Based Adjacency Representation (LAR) that assigns each vertex to exactly one community label. Consequently, it cannot directly model overlapping covers, even when boundary vertices are structurally supported by multiple groups.
+Recently, Santos et al.~\cite{santos2025} introduced \textbf{HP-MOCD} (\textit{High-Performance Evolutionary Multi-Objective Community Detection}), achieving breakthrough computational scalability for disjoint community detection by decomposing Newman's modularity into two competing objectives optimized via the Non-dominated Sorting Genetic Algorithm II (NSGA-II) \cite{deb2002}. However, HP-MOCD relies strictly on a discrete Locus-Based Adjacency Representation (LAR) that assigns each vertex to exactly one community label. Consequently, it cannot directly model overlapping covers, even when boundary vertices are structurally supported by multiple groups.
 
 In this work, we propose \textbf{OHP-MOCD}, a principled algorithmic generalization that extends HP-MOCD to overlapping topologies. OHP-MOCD directly maps each vertex to a variable-size membership set containing one primary community and zero or more structurally justified secondary memberships. OHP-MOCD retains the decomposed modularity formulation of HP-MOCD, generalized to overlapping covers via continuous soft membership weights, and introduces a third parsimony objective that regularizes multi-membership complexity. Furthermore, we incorporate Dual-Weighted Interaction (DWI) and an analytically proven, parameter-free statistical boundary bound based on the Central Limit Theorem that admits secondary memberships only when supported by significant neighborhood evidence.
 
@@ -91,14 +91,14 @@ The main contributions of this paper are summarized as follows:
     \item We conduct extensive empirical evaluations across 12 real-world ground-truth networks and synthetic LFR sweeps, benchmarking OHP-MOCD against six baselines across four distinct paradigms.
 \end{enumerate}
 
-The remainder of this paper is organized as follows. Section~\ref{sec:related} reviews related work. Section~\ref{sec:problem} formalizes the problem. Section~\ref{sec:method} details the OHP-MOCD methodology and complexity. Section~\ref{sec:experiments} presents the experimental setup, benchmark results, and discussions. Section~\ref{sec:acknowledgements} acknowledges institutional support. Finally, Section~\ref{sec:conclusion} concludes the paper.
+The remainder of this paper is organized as follows. Section~\ref{sec:related} reviews related work. Section~\ref{sec:problem} formalizes the problem. Section~\ref{sec:method} details the OHP-MOCD methodology and complexity. Section~\ref{sec:experiments} presents the experimental setup, benchmark results, and discussions. Finally, Section~\ref{sec:conclusion} concludes the paper.
 
 \section{Related Work}\label{sec:related}
 Community detection was traditionally framed as a disjoint partitioning problem, where Newman and Girvan's modularity $Q$~\cite{newman2004,newman2006} served as the benchmark quality criterion. Palla et al.~\cite{palla2005} demonstrated that overlap in empirical networks is a ubiquitous structural regularity and introduced the Clique Percolation Method. Xie et al.~\cite{xie2013} surveyed overlapping community detection, noting that overlapping vertices rarely exceed 30\% of a network and typically belong to two or three communities---providing an essential parsimony benchmark.
 
 Multi-objective evolutionary search is an effective paradigm for community discovery. Deb et al.'s Non-dominated Sorting Genetic Algorithm II (NSGA-II)~\cite{deb2002} provides the core optimization engine widely adopted across evolutionary graph partitioning methods \cite{pizzuti2012}. Prominent evolutionary algorithms developed for overlapping community detection include MCMOEA by Wen et al.~\cite{wen2016}, which evolves binary indicator strings over maximal clique adjacency graphs; EF-MOCD (Evolutionary Fuzzy Multi-Objective Community Detection) by Tian et al.~\cite{tian2020}, which evolves community centers and derives fuzzy memberships via shortest paths; and MO-EE by Bello-Orgaz et al.~\cite{bello2018}, which evolves line-graph edge partitions.
 
-Non-evolutionary paradigms include the Speaker-Listener Label Propagation Algorithm (SLPA)~\cite{xie2012}, which extends label propagation with dynamic memory retention, and Link Partitioning Around Medoids (LPAM)~\cite{ponomarenko2021}, which performs k-median clustering on commute distances between edges. In neural approaches, NOCD by Shchur and G{\"u}nnemann~\cite{shchur2019} utilizes a 2-layer Graph Convolutional Network under a Bernoulli--Poisson link model.
+Non-evolutionary paradigms include the Speaker-Listener Label Propagation Algorithm (SLPA)~\cite{xie2011}, which extends label propagation with dynamic memory retention, and Link Partitioning Around Medoids (LPAM)~\cite{ponomarenko2021}, which performs k-median clustering on commute distances between edges. In neural approaches, NOCD by Shchur and G{\"u}nnemann~\cite{shchur2019} utilizes a 2-layer Graph Convolutional Network under a Bernoulli--Poisson link model.
 
 HP-MOCD by Santos et al.~\cite{santos2025} established a high-performance baseline for disjoint community detection using topology-aware operators and Shi-style modularity decomposition. OHP-MOCD extends this lineage to overlapping covers while preserving its computational efficiency.
 
@@ -110,10 +110,11 @@ To evaluate partition quality without collapsing multiple conflicting criteria i
 \section{Proposed Method: OHP-MOCD}\label{sec:method}
 OHP-MOCD extends HP-MOCD \cite{santos2025} by replacing the single-label locus representation with a direct node-to-memberships chromosome, introducing an overlap regularization objective, and incorporating topology-aware operators with an analytical boundary rule.
 
-\subsection{Solution Representation and Objectives}\label{subsec:rep_and_obj}
+\subsection{Solution Representation}\label{subsec:rep}
 Each individual chromosome directly encodes a node-to-memberships mapping: $X = \big(M(v_1), M(v_2), \dots, M(v_N)\big)$, where $M(v_i) = \{c_i^{(1)}, c_i^{(2)}, \dots, c_i^{(k_i)}\}$, with primary community label $c_i^{(1)}$ and optional secondary labels $c_i^{(j)}$ ($j \ge 2$). There is no intermediate decoding step between chromosome and cover; reading a vertex affiliation requires $\mathcal{O}(1)$ operations, and local updates require $\mathcal{O}(\bar{k})$ time.
 
-OHP-MOCD decomposes modularity into two competing terms adapted to overlapping covers via uniform soft membership weights $r_{vc} = 1/|M(v)|$. The three objectives are defined as:
+\subsection{Fitness Function and Objectives}\label{subsec:fitness}
+OHP-MOCD decomposes modularity into two competing terms adapted to overlapping covers via uniform soft membership weights $r_{vc} = 1/|M(v)|$. The three fitness objectives are defined as:
 \begin{equation}\label{eq:objectives}
 f_1 = 1 - \tfrac{1}{M}\!{\textstyle\sum\limits_{(u,v)\in E}}\!{\textstyle\sum\limits_{c}} r_{uc} r_{vc}, \hspace{5pt} f_2 = {\textstyle\sum\limits_{c}}\!\left(\tfrac{\deg(c)}{2M}\right)^{\!2}\!, \hspace{5pt} f_3 = \tfrac{1}{N}\!{\textstyle\sum\limits_{v \in V}} \max(0, |M(v)| - 1),
 \end{equation}
@@ -144,7 +145,7 @@ Because graph size $(N + M)$ dominates population size $P$, runtime scales with 
 Following the empirical structure of Santos et al. \cite{santos2025}, we organize our evaluation into three complementary fronts: (1) an \textbf{intra-paradigm head-to-head comparison} against state-of-the-art MOEAs; (2) a \textbf{cross-paradigm benchmark evaluation} against competitive heuristics, link medoids, and graph neural networks; and (3) a rigorous \textbf{topological modularity, runtime scalability, and synthetic LFR robustness profile}.
 
 \subsection{Experimental Setup, Datasets, and Baseline Suite}\label{subsec:setup}
-We benchmark OHP-MOCD against six authentic baseline methods across four major algorithmic paradigms: (1) \textbf{Structural MOEAs:} MCMOEA \cite{wen2016}, EF-MOCD \cite{tian2020}, and MO-EE \cite{bello2018}; (2) \textbf{Dynamic Label Propagation:} SLPA \cite{xie2012}; (3) \textbf{Link Medoids:} LPAM \cite{ponomarenko2021}; (4) \textbf{Graph Neural Networks:} NOCD \cite{shchur2019}. Evaluation metrics include Overlapping Normalized Mutual Information ($ONMI$) \cite{lancichinetti2009onmi}, Pairwise $F_1$-Score, and Shen's Extended Modularity ($EQ$) \cite{shen2009,nicosia2009}. All evolutionary algorithms were evaluated under a common nominal search budget of population size $N_{\text{pop}} = 100$ and $T_{\text{max}} = 100$ generations. Stochastic algorithms were evaluated across 15 independent seeds for small-to-medium networks and 10 seeds for large networks (FB 1684, FB 1912, DBLP). All executions were performed on an identical hardware environment (Intel Xeon / AMD Ryzen 8-core, 32GB RAM). Full source code, baseline implementations, and reproduction scripts are publicly available at \url{https://github.com/aanasakhtar/ohp-mocd}. Topological characteristics of the 12 evaluated real-world ground-truth networks are summarized in Table~\ref{tab:datasets}.
+We benchmark OHP-MOCD against six authentic baseline methods across four major algorithmic paradigms: (1) \textbf{Structural MOEAs:} MCMOEA \cite{wen2016}, EF-MOCD \cite{tian2020}, and MO-EE \cite{bello2018}; (2) \textbf{Dynamic Label Propagation:} SLPA \cite{xie2011}; (3) \textbf{Link Medoids:} LPAM \cite{ponomarenko2021}; (4) \textbf{Graph Neural Networks:} NOCD \cite{shchur2019}. Evaluation metrics include Overlapping Normalized Mutual Information ($ONMI$) \cite{lancichinetti2009onmi}, Pairwise $F_1$-Score, and Shen's Extended Modularity ($EQ$) \cite{shen2009,nicosia2009}. All evolutionary algorithms were evaluated under a common nominal search budget of population size $N_{\text{pop}} = 100$ and $T_{\text{max}} = 100$ generations. Stochastic algorithms were evaluated across 15 independent seeds for small-to-medium networks and 10 seeds for large networks (FB 1684, FB 1912, DBLP). All executions were performed on an identical hardware environment (Intel Xeon / AMD Ryzen 8-core, 32GB RAM). Full source code, baseline implementations, and reproduction scripts are publicly available at \url{https://github.com/aanasakhtar/ohp-mocd}. Topological characteristics of the 12 evaluated real-world ground-truth networks are summarized in Table~\ref{tab:datasets}.
 
 \begin{table}[t]
 \centering
@@ -265,7 +266,7 @@ DBLP & MCMOEA (2016) & $0.3239 \pm 0.0022$ & $0.1000 \pm 0.0023$ & $0.1780 \pm 0
 \end{table}
 
 \subsection{Front 2: Cross-Paradigm Benchmark Evaluation}\label{subsec:cross_paradigm}
-Table~\ref{tab:cross_paradigm_results} evaluates OHP-MOCD against non-evolutionary paradigms across all 12 benchmark networks: SLPA \cite{xie2012}, LPAM \cite{ponomarenko2021}, and NOCD \cite{shchur2019}. Fig.~\ref{fig:real_world_4panel} visualizes ground-truth recovery metrics and topological scalability across all algorithms.
+Table~\ref{tab:cross_paradigm_results} evaluates OHP-MOCD against non-evolutionary paradigms across all 12 benchmark networks: SLPA \cite{xie2011}, LPAM \cite{ponomarenko2021}, and NOCD \cite{shchur2019}. Fig.~\ref{fig:real_world_4panel} visualizes ground-truth recovery metrics and topological scalability across all algorithms.
 
 Across algorithmic paradigms, the results demonstrate distinct and complementary strengths rather than universal dominance. SLPA achieves the highest $ONMI$ on several classical and social benchmarks, whereas OHP-MOCD obtains the highest $ONMI$ on \textit{Facebook 414} ($0.5146$) and the highest Pairwise $F_1$-score on \textit{Facebook 348} ($0.8712$), \textit{Facebook 686} ($0.7035$), \textit{Facebook 698} ($0.6651$), and \textit{DBLP} ($0.3443$). Furthermore, OHP-MOCD achieves top Extended Modularity ($EQ$) on classical benchmarks including \textit{Karate Club} ($0.3886$), \textit{Dolphins} ($0.5192$), \textit{Polbooks} ($0.4942$), and \textit{Facebook 698} ($0.5154$). These results indicate that OHP-MOCD is especially effective at discovering dense, coherent modules in complex social ego-networks and collaboration graphs without manual threshold tuning.
 
@@ -488,9 +489,6 @@ $\mu = 0.6$ & EF-MOCD (2020) & $0.0128 \pm 0.0044$ & $0.2856 \pm 0.0483$ & $0.02
 \section{Conclusion}\label{sec:conclusion}
 In this paper, we presented \textbf{OHP-MOCD}, a principled algorithmic extension of HP-MOCD \cite{santos2025} for overlapping community detection in complex networks. By combining a direct node-to-memberships chromosome, a tri-objective formulation with overlap parsimony regularization, Dual-Weighted Interaction, and an analytically derived statistical boundary bound based on the Central Limit Theorem, OHP-MOCD eliminates heuristic threshold tuning while preserving high-performance evolutionary search. Comprehensive experiments on 12 real-world ground-truth networks and synthetic LFR sweeps established that OHP-MOCD achieves substantial improvements in ground-truth recovery and modularity quality over existing evolutionary multi-objective methods while delivering up to $27.5\times$ computational speedups.
 
-\section*{Acknowledgements}\label{sec:acknowledgements}
-The authors express their sincere gratitude to Dr.~Syeda Saleha Raza, Program Director of Computer Science at Habib University, for her invaluable guidance, mentorship, and insightful discussions throughout this research.
-
 {\scriptsize
 \begin{thebibliography}{99}
 \setlength{\itemsep}{-0.5pt}
@@ -498,16 +496,36 @@ The authors express their sincere gratitude to Dr.~Syeda Saleha Raza, Program Di
 \setlength{\parskip}{0pt}
 
 % --- 1. Foundational Predecessors & Evolutionary Optimization ---
-\bibitem{santos2025}
-Santos, G.O., Vieira, L.S., Rossetti, G., Ferreira, C.H.G., Moreira, G.J.P.: A high-performance evolutionary multiobjective community detection algorithm. Social Network Analysis and Mining \textbf{15}(1), 110 (2025). \url{https://doi.org/10.1007/s13278-025-01519-7}
+\bibitem{fortunato2010}
+Fortunato, S.: Community detection in graphs. Physics Reports \textbf{486}(3-5), 75--174 (2010)
 
-\bibitem{deb2002}
-Deb, K., Pratap, A., Agarwal, S., Meyarivan, T.: A fast and elitist multiobjective genetic algorithm: NSGA-II. IEEE Transactions on Evolutionary Computation \textbf{6}(2), 182--197 (2002)
+\bibitem{newman2006}
+Newman, M.E.: Modularity and community structure in networks. Proceedings of the National Academy of Sciences \textbf{103}(23), 8577--8582 (2006)
+
+\bibitem{girvan2002}
+Girvan, M., Newman, M.E.: Community structure in social and biological networks. Proceedings of the National Academy of Sciences \textbf{99}(12), 7821--7826 (2002)
+
+\bibitem{palla2005}
+Palla, G., Der{\'e}nyi, I., Farkas, I., Vicsek, T.: Uncovering the overlapping community structure of complex networks in nature and society. Nature \textbf{435}(7043), 814--818 (2005)
+
+\bibitem{xie2013}
+Xie, J., Kelley, S., Szymanski, B.K.: Overlapping community detection in networks: The state-of-the-art and comparative study. ACM Computing Surveys \textbf{45}(4), 1--35 (2013)
+
+\bibitem{leskovec2012}
+McAuley, J., Leskovec, J.: Learning to discover social circles in ego networks. In: Advances in Neural Information Processing Systems (NeurIPS), vol. 25 (2012)
 
 \bibitem{pizzuti2012}
 Pizzuti, C.: A multiobjective genetic algorithm to find communities in complex networks. IEEE Transactions on Evolutionary Computation \textbf{16}(3), 418--430 (2012)
 
-% --- 2. Intra-Paradigm Evolutionary Baselines (Front 1) ---
+\bibitem{deb2002}
+Deb, K., Pratap, A., Agarwal, S., Meyarivan, T.: A fast and elitist multiobjective genetic algorithm: NSGA-II. IEEE Transactions on Evolutionary Computation \textbf{6}(2), 182--197 (2002)
+
+\bibitem{santos2025}
+Santos, G.O., Vieira, L.S., Rossetti, G., Ferreira, C.H.G., Moreira, G.J.P.: A high-performance evolutionary multiobjective community detection algorithm. Social Network Analysis and Mining \textbf{15}(1), 110 (2025). \url{https://doi.org/10.1007/s13278-025-01519-7}
+
+\bibitem{newman2004}
+Newman, M.E.J., Girvan, M.: Finding and evaluating community structure in networks. Physical Review E \textbf{69}(2), 026113 (2004)
+
 \bibitem{wen2016}
 Wen, X., Chen, W.N., Lin, Y., Gu, T., Pan, S., Li, Y., Yin, J.: A maximal clique based multiobjective evolutionary algorithm for overlapping community detection. IEEE Transactions on Evolutionary Computation \textbf{21}(5), 797--812 (2016)
 
@@ -517,9 +535,8 @@ Tian, D., Zhao, X., Zhao, Z., Shi, Z., Shen, Y.: An evolutionary multiobjective 
 \bibitem{bello2018}
 Bello-Orgaz, G., Salcedo-Sanz, S., Camacho, D.: A multiobjective genetic algorithm for overlapping community detection based on edge encoding. Information Sciences \textbf{462}, 290--314 (2018)
 
-% --- 3. Cross-Paradigm Baselines (Front 2) ---
-\bibitem{xie2012}
-Xie, J., Szymanski, B.K.: Towards linear time overlapping community detection in social networks. In: Pacific-Asia Conference on Knowledge Discovery and Data Mining (PAKDD), pp. 25--36. Springer (2012)
+\bibitem{xie2011}
+Xie, J., Szymanski, B.K., Liu, X.: SLPA: Uncovering Overlapping Communities in Social Networks via A Speaker-listener Interaction Dynamic Process. In: IEEE 11th International Conference on Data Mining Workshops (ICDMW), pp. 344--349 (2011)
 
 \bibitem{ponomarenko2021}
 Ponomarenko, A., Dix, A., Muchnik, L.: LPAM: Link partitioning around medoids for overlapping community detection. PLOS ONE \textbf{16}(4), e0248744 (2021)
@@ -527,15 +544,11 @@ Ponomarenko, A., Dix, A., Muchnik, L.: LPAM: Link partitioning around medoids fo
 \bibitem{shchur2019}
 Shchur, O., G{\"u}nnemann, S.: Overlapping community detection on complex networks with graph convolutional networks. In: Proceedings of the ACM SIGKDD International Conference on Knowledge Discovery \& Data Mining (2019)
 
-% --- 4. Metrics, Statistical Models & Synthetic Benchmarks ---
-\bibitem{newman2004}
-Newman, M.E.J., Girvan, M.: Finding and evaluating community structure in networks. Physical Review E \textbf{69}(2), 026113 (2004)
+\bibitem{lancichinetti2009onmi}
+Lancichinetti, A., Fortunato, S., Kert{\'e}sz, J.: Detecting the overlapping and hierarchical community structure in complex networks. New Journal of Physics \textbf{11}(3), 033015 (2009)
 
-\bibitem{palla2005}
-Palla, G., Der{\'e}nyi, I., Farkas, I., Vicsek, T.: Uncovering the overlapping community structure of complex networks in nature and society. Nature \textbf{435}(7043), 814--818 (2005)
-
-\bibitem{xie2013}
-Xie, J., Kelley, S., Szymanski, B.K.: Overlapping community detection in networks: The state-of-the-art and comparative study. ACM Computing Surveys \textbf{45}(4), 1--35 (2013)
+\bibitem{lancichinetti2008lfr}
+Lancichinetti, A., Fortunato, S., Radicchi, F.: Benchmark graphs for testing community detection algorithms. Physical Review E \textbf{78}(4), 046110 (2008)
 
 \bibitem{shen2009}
 Shen, H., Cheng, X., Cai, K., Hu, M.B.: Detect overlapping and hierarchical community structure in networks. Physica A: Statistical Mechanics and its Applications \textbf{388}(8), 1706--1712 (2009)
@@ -543,36 +556,17 @@ Shen, H., Cheng, X., Cai, K., Hu, M.B.: Detect overlapping and hierarchical comm
 \bibitem{nicosia2009}
 Nicosia, V., Mangioni, G., Carchiolo, V., Malgeri, M.: Extending the definition of modularity to directed graphs with overlapping communities. Journal of Statistical Mechanics: Theory and Experiment \textbf{2009}(03), P03024 (2009)
 
-\bibitem{lancichinetti2009onmi}
-Lancichinetti, A., Fortunato, S., Kert{\'e}sz, J.: Detecting the overlapping and hierarchical community structure in complex networks. New Journal of Physics \textbf{11}(3), 033015 (2009)
-
-\bibitem{lancichinetti2008lfr}
-Lancichinetti, A., Fortunato, S., Radicchi, F.: Benchmark graphs for testing community detection algorithms. Physical Review E \textbf{78}(4), 046110 (2008)
-
-\bibitem{fortunato2010}
-Fortunato, S.: Community detection in graphs. Physics Reports \textbf{486}(3-5), 75--174 (2010)
-
-% --- 5. 12 Real-World Benchmark Ground-Truth Datasets ---
 \bibitem{zachary1977}
-Zachary, W.W.: An information flow model for conflict and fission in small groups. Journal of Anthropological Research \textbf{33}(4), 452--473 (1977)
+Zachary, W.W.: An information flow model for conflict and fission in small groups. Journal of Anthropological Research \textbf{33}(4), 452--473 (1977). \url{https://doi.org/10.1086/jar.33.4.3629752}
 
 \bibitem{lusseau2003}
-Lusseau, D., Schneider, K., Boisseau, O.J., Haase, P., Slooten, E., Dawson, S.M.: The bottlenose dolphin community of Doubtful Sound features a large proportion of long-lasting associations. Behavioral Ecology and Sociobiology \textbf{54}(4), 396--405 (2003)
-
-\bibitem{newman2006}
-Newman, M.E.: Modularity and community structure in networks. Proceedings of the National Academy of Sciences \textbf{103}(23), 8577--8582 (2006)
-
-\bibitem{girvan2002}
-Girvan, M., Newman, M.E.: Community structure in social and biological networks. Proceedings of the National Academy of Sciences \textbf{99}(12), 7821--7826 (2002)
+Lusseau, D., Schneider, K., Boisseau, O.J., Haase, P., Slooten, E., Dawson, S.M.: The bottlenose dolphin community of Doubtful Sound features a large proportion of long-lasting associations. Behavioral Ecology and Sociobiology \textbf{54}(4), 396--405 (2003). \url{https://doi.org/10.1007/s00265-003-0651-y}
 
 \bibitem{leskovec2007}
-Leskovec, J., Kleinberg, J., Faloutsos, C.: Graph evolution: Densification and decreasing diameters. ACM Transactions on Knowledge Discovery from Data \textbf{1}(1), 2--es (2007)
-
-\bibitem{leskovec2012}
-McAuley, J., Leskovec, J.: Learning to discover social circles in ego networks. In: Advances in Neural Information Processing Systems (NeurIPS), vol. 25 (2012)
+Leskovec, J., Kleinberg, J., Faloutsos, C.: Graph evolution: Densification and shrinking diameters. ACM Transactions on Knowledge Discovery from Data \textbf{1}(1), 2--es (2007). \url{https://snap.stanford.edu/data/email-Eu-core.html}
 
 \bibitem{yang2015}
-Yang, J., Leskovec, J.: Defining and evaluating network communities based on ground-truth. Knowledge and Information Systems \textbf{42}(1), 181--213 (2015)
+Yang, J., Leskovec, J.: Defining and evaluating network communities based on ground-truth. Knowledge and Information Systems \textbf{42}(1), 181--213 (2015). \url{https://snap.stanford.edu/data/com-DBLP.html}
 
 \end{thebibliography}
 }
