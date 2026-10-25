@@ -1,0 +1,83 @@
+\begin{thebibliography}{99}
+\setlength{\itemsep}{-0.5pt}
+\setlength{\parsep}{0pt}
+\setlength{\parskip}{0pt}
+
+% --- 1. Foundational Predecessors & Evolutionary Optimization ---
+\bibitem{santos2025}
+Santos, G.O., Vieira, L.S., Rossetti, G., Ferreira, C.H.G., Moreira, G.J.P.: A high-performance evolutionary multiobjective community detection algorithm. Social Network Analysis and Mining \textbf{15}(1), 110 (2025). \url{https://doi.org/10.1007/s13278-025-01519-7}
+
+\bibitem{deb2002}
+Deb, K., Pratap, A., Agarwal, S., Meyarivan, T.: A fast and elitist multiobjective genetic algorithm: NSGA-II. IEEE Transactions on Evolutionary Computation \textbf{6}(2), 182--197 (2002)
+
+\bibitem{pizzuti2012}
+Pizzuti, C.: A multiobjective genetic algorithm to find communities in complex networks. IEEE Transactions on Evolutionary Computation \textbf{16}(3), 418--430 (2012)
+
+% --- 2. Intra-Paradigm Evolutionary Baselines (Front 1) ---
+\bibitem{wen2016}
+Wen, X., Chen, W.N., Lin, Y., Gu, T., Pan, S., Li, Y., Yin, J.: A maximal clique based multiobjective evolutionary algorithm for overlapping community detection. IEEE Transactions on Evolutionary Computation \textbf{21}(5), 797--812 (2016)
+
+\bibitem{tian2020}
+Tian, D., Zhao, X., Zhao, Z., Shi, Z., Shen, Y.: An evolutionary multiobjective optimization-based fuzzy method for overlapping community detection. IEEE Transactions on Fuzzy Systems \textbf{29}(10), 2843--2856 (2020)
+
+\bibitem{bello2018}
+Bello-Orgaz, G., Salcedo-Sanz, S., Camacho, D.: A multiobjective genetic algorithm for overlapping community detection based on edge encoding. Information Sciences \textbf{462}, 290--314 (2018)
+
+% --- 3. Cross-Paradigm Baselines (Front 2) ---
+\bibitem{xie2012}
+Xie, J., Szymanski, B.K.: Towards linear time overlapping community detection in social networks. In: Pacific-Asia Conference on Knowledge Discovery and Data Mining (PAKDD), pp. 25--36. Springer (2012)
+
+\bibitem{ponomarenko2021}
+Ponomarenko, A., Dix, A., Muchnik, L.: LPAM: Link partitioning around medoids for overlapping community detection. PLOS ONE \textbf{16}(4), e0248744 (2021)
+
+\bibitem{shchur2019}
+Shchur, O., G{\"u}nnemann, S.: Overlapping community detection on complex networks with graph convolutional networks. In: Proceedings of the ACM SIGKDD International Conference on Knowledge Discovery \& Data Mining (2019)
+
+% --- 4. Metrics, Statistical Models & Synthetic Benchmarks ---
+\bibitem{newman2004}
+Newman, M.E.J., Girvan, M.: Finding and evaluating community structure in networks. Physical Review E \textbf{69}(2), 026113 (2004)
+
+\bibitem{palla2005}
+Palla, G., Der{\'e}nyi, I., Farkas, I., Vicsek, T.: Uncovering the overlapping community structure of complex networks in nature and society. Nature \textbf{435}(7043), 814--818 (2005)
+
+\bibitem{xie2013}
+Xie, J., Kelley, S., Szymanski, B.K.: Overlapping community detection in networks: The state-of-the-art and comparative study. ACM Computing Surveys \textbf{45}(4), 1--35 (2013)
+
+\bibitem{shen2009}
+Shen, H., Cheng, X., Cai, K., Hu, M.B.: Detect overlapping and hierarchical community structure in networks. Physica A: Statistical Mechanics and its Applications \textbf{388}(8), 1706--1712 (2009)
+
+\bibitem{nicosia2009}
+Nicosia, V., Mangioni, G., Carchiolo, V., Malgeri, M.: Extending the definition of modularity to directed graphs with overlapping communities. Journal of Statistical Mechanics: Theory and Experiment \textbf{2009}(03), P03024 (2009)
+
+\bibitem{lancichinetti2009onmi}
+Lancichinetti, A., Fortunato, S., Kert{\'e}sz, J.: Detecting the overlapping and hierarchical community structure in complex networks. New Journal of Physics \textbf{11}(3), 033015 (2009)
+
+\bibitem{barrett2026abcd}
+Barrett, J., DeWolfe, R., Kami{\'n}ski, B., Pra{\l}at, P., Smith, A., Th{\'e}berge, F.: The artificial benchmark for community detection with outliers and overlapping communities (ABCD+$o^2$). Journal of Complex Networks \textbf{14}(4), cnag023 (2026)
+
+\bibitem{fortunato2010}
+Fortunato, S.: Community detection in graphs. Physics Reports \textbf{486}(3-5), 75--174 (2010)
+
+% --- 5. 12 Real-World Benchmark Ground-Truth Datasets ---
+\bibitem{zachary1977}
+Zachary, W.W.: An information flow model for conflict and fission in small groups. Journal of Anthropological Research \textbf{33}(4), 452--473 (1977)
+
+\bibitem{lusseau2003}
+Lusseau, D., Schneider, K., Boisseau, O.J., Haase, P., Slooten, E., Dawson, S.M.: The bottlenose dolphin community of Doubtful Sound features a large proportion of long-lasting associations. Behavioral Ecology and Sociobiology \textbf{54}(4), 396--405 (2003)
+
+\bibitem{newman2006}
+Newman, M.E.: Modularity and community structure in networks. Proceedings of the National Academy of Sciences \textbf{103}(23), 8577--8582 (2006)
+
+\bibitem{girvan2002}
+Girvan, M., Newman, M.E.: Community structure in social and biological networks. Proceedings of the National Academy of Sciences \textbf{99}(12), 7821--7826 (2002)
+
+\bibitem{leskovec2007}
+Yin, H., Benson, A. R., Leskovec, J., \& Gleich, D. F. (2017). Local higher-order graph clustering. Proceedings of the 23rd ACM SIGKDD International Conference on Knowledge Discovery and Data Mining, 555–564.
+
+\bibitem{leskovec2012}
+McAuley, J., Leskovec, J.: Learning to discover social circles in ego networks. In: Advances in Neural Information Processing Systems (NeurIPS), vol. 25 (2012)
+
+\bibitem{yang2015}
+Yang, J., Leskovec, J.: Defining and evaluating network communities based on ground-truth. Knowledge and Information Systems \textbf{42}(1), 181--213 (2015)
+
+\end{thebibliography}

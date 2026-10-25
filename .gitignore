@@ -31,10 +31,18 @@ flame*.svg
 *.prof
 .claude/
 
+# Agent/dev additions
+.kilo/
+*.exe
+
 # Allowed-specific files
 !res/**/*.png
 !docs/**/*.png
 !docs/**/*.pdf
+!CNALatexTemplate/**/*.png
+!CNALatexTemplate/**/*.pdf
+!CNALatexTemplate/*.png
+!CNALatexTemplate/*.pdf
 
 # User-specific files (MonoDevelop/Xamarin Studio)
 *.userprefs

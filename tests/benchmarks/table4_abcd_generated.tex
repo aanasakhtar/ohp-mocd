@@ -1,0 +1,63 @@
+\begin{table}[t]
+\centering
+\fontsize{6.2pt}{7.2pt}\selectfont
+\renewcommand{\arraystretch}{0.48}
+\setlength{\tabcolsep}{2.0pt}
+\caption{Comparative performance on modern synthetic $\text{ABCD}+o^2$ benchmark networks across background mixing parameter values $\xi \in [0.1, 0.6]$ with overlap multiplier $\eta = 1.50$ (mean $\pm$ std across 5 independent seeds; runtime reports mean wall-clock execution time). Boldface indicates the best mean value among all compared methods.}
+\label{tab:abcd_results}
+\resizebox{0.94\textwidth}{!}{%
+\begin{tabular}{@{}clcccc@{}}
+\toprule
+\textbf{Mixing Parameter ($\xi$)} & \textbf{Algorithm} & \textbf{ONMI} & \textbf{Pairwise $F_1$} & \textbf{Modularity ($EQ$)} & \textbf{Runtime (s)} \\
+\midrule
+ $\xi = 0.1$ & EF-MOCD (2020) & $0.2107 \pm 0.0109$ & $0.4529 \pm 0.0192$ & $0.2844 \pm 0.0174$ & 50.12\text{s} \\
+  & LPAM (2021) & $0.2217 \pm 0.0166$ & $0.3527 \pm 0.0295$ & $0.3460 \pm 0.0130$ & 1.30\text{s} \\
+  & MCMOEA (2016) & $0.1625 \pm 0.0059$ & $0.2368 \pm 0.0119$ & $0.0262 \pm 0.0011$ & 6.74\text{s} \\
+  & MO-EE (2018) & $0.1915 \pm 0.0155$ & $0.3944 \pm 0.0263$ & $0.0363 \pm 0.0026$ & 7.03\text{s} \\
+  & NOCD (2019) & $0.2163 \pm 0.0085$ & $0.3433 \pm 0.0655$ & $0.1123 \pm 0.0168$ & \mathbf{0.13\text{s}} \\
+  & \textbf{OHP-MOCD (Proposed)} & $\mathbf{0.4817 \pm 0.0659}$ & $\mathbf{0.6646 \pm 0.0524}$ & $\mathbf{0.5108 \pm 0.0263}$ & 2.24\text{s} \\
+  & SLPA (2011) & $0.4699 \pm 0.0432$ & $0.6222 \pm 0.0279$ & $0.4925 \pm 0.0422$ & 0.71\text{s} \\
+\midrule
+ $\xi = 0.2$ & EF-MOCD (2020) & $0.1668 \pm 0.0058$ & $0.3948 \pm 0.0212$ & $0.2643 \pm 0.0162$ & 43.69\text{s} \\
+  & LPAM (2021) & $0.1805 \pm 0.0270$ & $0.3152 \pm 0.0340$ & $0.2873 \pm 0.0095$ & 1.30\text{s} \\
+  & MCMOEA (2016) & $0.1608 \pm 0.0071$ & $0.2387 \pm 0.0058$ & $0.0240 \pm 0.0010$ & 7.73\text{s} \\
+  & MO-EE (2018) & $0.1811 \pm 0.0144$ & $0.3678 \pm 0.0181$ & $0.0335 \pm 0.0027$ & 6.20\text{s} \\
+  & NOCD (2019) & $0.1624 \pm 0.0169$ & $0.2840 \pm 0.0284$ & $0.0674 \pm 0.0137$ & \mathbf{0.04\text{s}} \\
+  & \textbf{OHP-MOCD (Proposed)} & $\mathbf{0.4263 \pm 0.0196}$ & $\mathbf{0.6295 \pm 0.0326}$ & $\mathbf{0.4629 \pm 0.0119}$ & 3.35\text{s} \\
+  & SLPA (2011) & $0.3827 \pm 0.0301$ & $0.5723 \pm 0.0358$ & $0.4186 \pm 0.0377$ & 0.72\text{s} \\
+\midrule
+ $\xi = 0.3$ & EF-MOCD (2020) & $0.0954 \pm 0.0054$ & $0.3232 \pm 0.0187$ & $0.2029 \pm 0.0220$ & 42.81\text{s} \\
+  & LPAM (2021) & $0.1329 \pm 0.0310$ & $0.2500 \pm 0.0233$ & $0.2622 \pm 0.0175$ & 1.48\text{s} \\
+  & MCMOEA (2016) & $0.1500 \pm 0.0064$ & $0.2247 \pm 0.0052$ & $0.0227 \pm 0.0007$ & 7.57\text{s} \\
+  & MO-EE (2018) & $0.1527 \pm 0.0148$ & $0.3105 \pm 0.0214$ & $0.0324 \pm 0.0014$ & 6.43\text{s} \\
+  & NOCD (2019) & $0.1323 \pm 0.0390$ & $0.2175 \pm 0.0202$ & $0.0437 \pm 0.0118$ & \mathbf{0.05\text{s}} \\
+  & \textbf{OHP-MOCD (Proposed)} & $0.2679 \pm 0.0602$ & $\mathbf{0.4333 \pm 0.0600}$ & $\mathbf{0.3636 \pm 0.0498}$ & 1.87\text{s} \\
+  & SLPA (2011) & $\mathbf{0.2774 \pm 0.0624}$ & $0.3471 \pm 0.0598$ & $0.2511 \pm 0.1090$ & 0.69\text{s} \\
+\midrule
+ $\xi = 0.4$ & EF-MOCD (2020) & $0.0462 \pm 0.0166$ & $0.2884 \pm 0.0185$ & $0.0771 \pm 0.0374$ & 47.67\text{s} \\
+  & LPAM (2021) & $0.0836 \pm 0.0114$ & $0.2144 \pm 0.0203$ & $0.2247 \pm 0.0113$ & 2.03\text{s} \\
+  & MCMOEA (2016) & $0.1377 \pm 0.0054$ & $0.2070 \pm 0.0063$ & $0.0191 \pm 0.0017$ & 10.08\text{s} \\
+  & MO-EE (2018) & $0.1306 \pm 0.0029$ & $0.2841 \pm 0.0125$ & $0.0277 \pm 0.0035$ & 7.36\text{s} \\
+  & NOCD (2019) & $0.0824 \pm 0.0090$ & $0.2057 \pm 0.0397$ & $0.0239 \pm 0.0027$ & \mathbf{0.05\text{s}} \\
+  & \textbf{OHP-MOCD (Proposed)} & $0.1473 \pm 0.0349$ & $\mathbf{0.3414 \pm 0.0458}$ & $\mathbf{0.2852 \pm 0.0297}$ & 2.24\text{s} \\
+  & SLPA (2011) & $\mathbf{0.2117 \pm 0.0563}$ & $0.3295 \pm 0.0366$ & $0.1900 \pm 0.0257$ & 0.74\text{s} \\
+\midrule
+ $\xi = 0.5$ & EF-MOCD (2020) & $0.0367 \pm 0.0138$ & $\mathbf{0.2848 \pm 0.0251}$ & $0.0497 \pm 0.0089$ & 46.78\text{s} \\
+  & LPAM (2021) & $0.0682 \pm 0.0123$ & $0.1952 \pm 0.0107$ & $0.2210 \pm 0.0046$ & 2.05\text{s} \\
+  & MCMOEA (2016) & $0.1254 \pm 0.0085$ & $0.1854 \pm 0.0097$ & $0.0182 \pm 0.0006$ & 10.35\text{s} \\
+  & MO-EE (2018) & $0.1027 \pm 0.0091$ & $0.2588 \pm 0.0075$ & $0.0282 \pm 0.0017$ & 7.50\text{s} \\
+  & NOCD (2019) & $0.0635 \pm 0.0094$ & $0.1943 \pm 0.0070$ & $0.0182 \pm 0.0063$ & \mathbf{0.05\text{s}} \\
+  & \textbf{OHP-MOCD (Proposed)} & $0.0868 \pm 0.0211$ & $0.2320 \pm 0.0297$ & $\mathbf{0.2934 \pm 0.0187}$ & 2.22\text{s} \\
+  & SLPA (2011) & $\mathbf{0.1811 \pm 0.1819}$ & $0.2820 \pm 0.0248$ & $0.1215 \pm 0.0759$ & 0.87\text{s} \\
+\midrule
+ $\xi = 0.6$ & EF-MOCD (2020) & $0.0225 \pm 0.0123$ & $0.2796 \pm 0.0155$ & $0.0467 \pm 0.0145$ & 25.48\text{s} \\
+  & LPAM (2021) & $0.0562 \pm 0.0065$ & $0.1945 \pm 0.0062$ & $0.1968 \pm 0.0036$ & 0.80\text{s} \\
+  & MCMOEA (2016) & $0.1175 \pm 0.0042$ & $0.1710 \pm 0.0060$ & $0.0178 \pm 0.0007$ & 7.00\text{s} \\
+  & MO-EE (2018) & $0.0915 \pm 0.0031$ & $0.2423 \pm 0.0074$ & $0.0257 \pm 0.0028$ & 3.76\text{s} \\
+  & NOCD (2019) & $0.0504 \pm 0.0090$ & $0.1847 \pm 0.0145$ & $0.0111 \pm 0.0029$ & \mathbf{0.02\text{s}} \\
+  & \textbf{OHP-MOCD (Proposed)} & $0.0482 \pm 0.0040$ & $0.1913 \pm 0.0255$ & $\mathbf{0.2716 \pm 0.0167}$ & 1.59\text{s} \\
+  & SLPA (2011) & $\mathbf{0.2019 \pm 0.1729}$ & $\mathbf{0.2827 \pm 0.0135}$ & $0.0002 \pm 0.0004$ & 0.38\text{s} \\
+\bottomrule
+\end{tabular}%
+}
+\end{table}

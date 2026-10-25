@@ -13,6 +13,7 @@
 \usepackage{algorithm}
 \usepackage{algorithmicx}
 \usepackage{algpseudocode}
+\usepackage{listings}
 \usepackage{subcaption}
 \usepackage{placeins}
 \usepackage{microtype}
@@ -21,6 +22,7 @@
 \def\UrlFont{\rmfamily}
 
 % --- Page Budget Control: Strict <= 12 Pages Enforcement ---
+\addtolength{\textheight}{1.15cm}
 \linespread{0.98} 
 
 \makeatletter
@@ -46,6 +48,9 @@
 \setlength{\belowdisplayskip}{1.0pt plus 0.5pt minus 0.5pt}
 \setlength{\abovedisplayshortskip}{0.5pt plus 0.5pt minus 0.5pt}
 \setlength{\belowdisplayshortskip}{0.5pt plus 0.5pt minus 0.5pt}
+\setcounter{topnumber}{4}
+\setcounter{bottomnumber}{4}
+\setcounter{totalnumber}{6}
 \renewcommand{\topfraction}{0.98}
 \renewcommand{\bottomfraction}{0.98}
 \renewcommand{\textfraction}{0.02}
@@ -57,16 +62,16 @@
 \title{OHP-MOCD: Overlapping Community Detection via an Evolutionary Multi-Objective Extension of HP-MOCD}
 \titlerunning{OHP-MOCD for Overlapping Community Detection}
 
-\author{Muhammad Anas \and Aneeza Khan \and Manahil Jamil \and Syeda Saleha Raza}
-\authorrunning{M. Anas, A. Khan, M. Jamil, and S. S. Raza}
+\author{Muhammad Anas \and Manahil Jamil \and Aneeza Khan  \and Syeda Saleha Raza}
+\authorrunning{M. Anas, M. Jamil, A. Khan,  and S. S. Raza}
 
-\institute{Department of Computer Science, Habib University, Karachi, Pakistan\\
+\institute{Computer Science, Habib University, Karachi, Pakistan\\
 \url{https://github.com/aanasakhtar/ohp-mocd}}
 
 \maketitle
 
 \begin{abstract}
-Overlapping community detection is essential in complex networks where vertices naturally participate in multiple functional modules, yet designing scalable evolutionary multi-objective algorithms (MOEAs) for overlapping structures remains a major challenge. While the recently proposed HP-MOCD framework achieves breakthrough computational efficiency for crisp community detection, its discrete locus-based encoding strictly constrains each vertex to a single cluster. To overcome this limitation, we propose \textbf{OHP-MOCD}, which extends HP-MOCD to overlapping covers via a direct node-to-memberships chromosome. The framework introduces a tri-objective formulation optimized using the Non-dominated Sorting Genetic Algorithm II (NSGA-II), balancing decomposed modularity with an overlap parsimony regularizer. Additionally, OHP-MOCD incorporates an analytically derived, parameter-free statistical boundary bound based on the Central Limit Theorem to govern multi-membership admission. We systematically evaluate OHP-MOCD against six competitive baselines across four distinct algorithmic paradigms on 12 real-world ground-truth networks and synthetic LFR benchmark sweeps ($\mu \in [0.1, 0.6]$). Empirical results demonstrate that OHP-MOCD achieves the highest mean Overlapping NMI on 10 of the 12 real-world networks within the evolutionary paradigm and secures top modularity on dense social topologies, while executing up to $27.5\times$ faster than competing evolutionary methods.
+Overlapping community detection is essential in complex networks where vertices naturally participate in multiple functional modules, yet designing scalable evolutionary multi-objective algorithms (MOEAs) for overlapping structures remains a major challenge. While the recently proposed HP-MOCD framework achieves breakthrough computational efficiency for crisp community detection, its discrete locus-based encoding strictly constrains each vertex to a single cluster, precluding multi-membership boundaries. We propose \textbf{OHP-MOCD}, which extends HP-MOCD to overlapping covers via a direct node-to-memberships chromosome, a tri-objective NSGA-II formulation optimizing decomposed modularity alongside overlap parsimony regularization, and an analytically derived, parameter-free statistical boundary bound based on Chebyshev's inequality. We systematically evaluate OHP-MOCD against six competitive baselines across four distinct algorithmic paradigms on 12 real-world ground-truth networks and modern synthetic $\text{ABCD}+o^2$ benchmark sweeps ($\xi \in [0.1, 0.6]$). Empirical results demonstrate that OHP-MOCD achieves the highest mean Overlapping NMI on 10 of the 12 real-world networks within the evolutionary paradigm and secures top modularity on dense social topologies, while executing up to $27.5\times$ faster than competing evolutionary methods.
 \end{abstract}
 
 \keywords{Overlapping Community Detection, Evolutionary Multi-Objective Optimization, NSGA-II, Modularity Decomposition, Complex Networks, Graph Mining}
@@ -78,17 +83,17 @@ In real-world networks, community overlap is a ubiquitous structural property ra
 
 Evolutionary multi-objective algorithms (MOEAs) are particularly well suited to community detection because the structural quality of a community partition cannot be adequately captured by a single scalar metric \cite{pizzuti2012,deb2002}. A high-quality overlapping cover must simultaneously encourage strong intra-community cohesion, minimize inter-community mixing, and prevent spurious overlap bloat. Collapsing these conflicting structural criteria into a single scalar objective requires fixed trade-off hyperparameters that introduce human bias. Multi-objective optimization resolves this by maintaining a Pareto front of non-dominated candidate covers representing diverse topological trade-offs.
 
-Recently, Santos et al.~\cite{santos2025} introduced \textbf{HP-MOCD} (\textit{High-Performance Evolutionary Multi-Objective Community Detection}), achieving breakthrough computational scalability for disjoint community detection by decomposing Newman's modularity into two competing objectives optimized via the Non-dominated Sorting Genetic Algorithm II (NSGA-II) \cite{deb2002}. However, HP-MOCD relies strictly on a discrete Locus-Based Adjacency Representation (LAR) that assigns each vertex to exactly one community label. Consequently, it cannot directly model overlapping covers, even when boundary vertices are structurally supported by multiple groups.
+Recently, Santos et al.~\cite{santos2025} introduced \textbf{HP-MOCD} (\textit{High-Performance Evolutionary Multi-Objective Community Detection}), achieving breakthrough computational scalability for disjoint community detection by decomposing Newman's modularity into two competing objectives optimized via NSGA-II. However, HP-MOCD relies strictly on a discrete Locus-Based Adjacency Representation (LAR) that assigns each vertex to exactly one community label. Consequently, it cannot directly model overlapping covers, even when boundary vertices are structurally supported by multiple groups.
 
-In this work, we propose \textbf{OHP-MOCD}, a principled algorithmic generalization that extends HP-MOCD to overlapping topologies. OHP-MOCD directly maps each vertex to a variable-size membership set containing one primary community and zero or more structurally justified secondary memberships. OHP-MOCD retains the decomposed modularity formulation of HP-MOCD, generalized to overlapping covers via continuous soft membership weights, and introduces a third parsimony objective that regularizes multi-membership complexity. Furthermore, we incorporate Dual-Weighted Interaction (DWI) and an analytically proven, parameter-free statistical boundary bound based on the Central Limit Theorem that admits secondary memberships only when supported by significant neighborhood evidence.
+In this work, we propose \textbf{OHP-MOCD}, a principled algorithmic generalization that extends HP-MOCD to overlapping topologies. OHP-MOCD directly maps each vertex to a variable-size membership set containing one primary community and zero or more structurally justified secondary memberships. OHP-MOCD retains the decomposed modularity formulation of HP-MOCD, generalized to overlapping covers via continuous soft membership weights, and introduces a third parsimony objective that regularizes multi-membership complexity. Furthermore, we incorporate Dual-Weighted Interaction (DWI) and an analytically derived, parameter-free statistical boundary bound based on Chebyshev's inequality that admits secondary memberships only when supported by significant neighborhood evidence.
 
 The main contributions of this paper are summarized as follows:
 \begin{enumerate}
     \item We generalize HP-MOCD from disjoint partitions to overlapping covers using a direct node-to-memberships chromosome.
     \item We formulate OHP-MOCD as a tri-objective NSGA-II optimization problem, combining decomposed modularity objectives with an overlap complexity regularizer.
     \item We develop topology-aware genetic operators (4-parent ensemble crossover and local-neighborhood majority mutation) tailored for multi-membership chromosomes.
-    \item We introduce Dual-Weighted Interaction (DWI) and an analytically derived, parameter-free statistical null boundary bound based on the Central Limit Theorem.
-    \item We conduct extensive empirical evaluations across 12 real-world ground-truth networks and synthetic LFR sweeps, benchmarking OHP-MOCD against six baselines across four distinct paradigms.
+    \item We introduce Dual-Weighted Interaction (DWI) and an analytically derived, parameter-free statistical null boundary bound based on Chebyshev's inequality.
+    \item We conduct extensive empirical evaluations across 12 real-world ground-truth networks and modern synthetic $\text{ABCD}+o^2$ sweeps with authentic overlapping boundaries, benchmarking OHP-MOCD against six baselines across four distinct paradigms.
 \end{enumerate}
 
 The remainder of this paper is organized as follows. Section~\ref{sec:related} reviews related work. Section~\ref{sec:problem} formalizes the problem. Section~\ref{sec:method} details the OHP-MOCD methodology and complexity. Section~\ref{sec:experiments} presents the experimental setup, benchmark results, and discussions. Finally, Section~\ref{sec:conclusion} concludes the paper.
@@ -98,7 +103,7 @@ Community detection was traditionally framed as a disjoint partitioning problem,
 
 Multi-objective evolutionary search is an effective paradigm for community discovery. Deb et al.'s Non-dominated Sorting Genetic Algorithm II (NSGA-II)~\cite{deb2002} provides the core optimization engine widely adopted across evolutionary graph partitioning methods \cite{pizzuti2012}. Prominent evolutionary algorithms developed for overlapping community detection include MCMOEA by Wen et al.~\cite{wen2016}, which evolves binary indicator strings over maximal clique adjacency graphs; EF-MOCD (Evolutionary Fuzzy Multi-Objective Community Detection) by Tian et al.~\cite{tian2020}, which evolves community centers and derives fuzzy memberships via shortest paths; and MO-EE by Bello-Orgaz et al.~\cite{bello2018}, which evolves line-graph edge partitions.
 
-Non-evolutionary paradigms include the Speaker-Listener Label Propagation Algorithm (SLPA)~\cite{xie2011}, which extends label propagation with dynamic memory retention, and Link Partitioning Around Medoids (LPAM)~\cite{ponomarenko2021}, which performs k-median clustering on commute distances between edges. In neural approaches, NOCD by Shchur and G{\"u}nnemann~\cite{shchur2019} utilizes a 2-layer Graph Convolutional Network under a Bernoulli--Poisson link model.
+Non-evolutionary paradigms include the Speaker-Listener Label Propagation Algorithm (SLPA)~\cite{xie2012}, which extends label propagation with dynamic memory retention, and Link Partitioning Around Medoids (LPAM)~\cite{ponomarenko2021}, which performs k-median clustering on commute distances between edges. In neural approaches, NOCD by Shchur and G{\"u}nnemann~\cite{shchur2019} utilizes a 2-layer Graph Convolutional Network under a Bernoulli--Poisson link model.
 
 HP-MOCD by Santos et al.~\cite{santos2025} established a high-performance baseline for disjoint community detection using topology-aware operators and Shi-style modularity decomposition. OHP-MOCD extends this lineage to overlapping covers while preserving its computational efficiency.
 
@@ -110,15 +115,16 @@ To evaluate partition quality without collapsing multiple conflicting criteria i
 \section{Proposed Method: OHP-MOCD}\label{sec:method}
 OHP-MOCD extends HP-MOCD \cite{santos2025} by replacing the single-label locus representation with a direct node-to-memberships chromosome, introducing an overlap regularization objective, and incorporating topology-aware operators with an analytical boundary rule.
 
-\subsection{Solution Representation}\label{subsec:rep}
+\subsection{Solution Representation and Objectives}\label{subsec:rep_and_obj}
 Each individual chromosome directly encodes a node-to-memberships mapping: $X = \big(M(v_1), M(v_2), \dots, M(v_N)\big)$, where $M(v_i) = \{c_i^{(1)}, c_i^{(2)}, \dots, c_i^{(k_i)}\}$, with primary community label $c_i^{(1)}$ and optional secondary labels $c_i^{(j)}$ ($j \ge 2$). There is no intermediate decoding step between chromosome and cover; reading a vertex affiliation requires $\mathcal{O}(1)$ operations, and local updates require $\mathcal{O}(\bar{k})$ time.
 
-\subsection{Fitness Function and Objectives}\label{subsec:fitness}
-OHP-MOCD decomposes modularity into two competing terms adapted to overlapping covers via uniform soft membership weights $r_{vc} = 1/|M(v)|$. The three fitness objectives are defined as:
+OHP-MOCD decomposes modularity into two competing terms adapted to overlapping covers via uniform soft membership weights $r_{vc} = 1/|M(v)|$. The three objectives are defined as:
 \begin{equation}\label{eq:objectives}
 f_1 = 1 - \tfrac{1}{M}\!{\textstyle\sum\limits_{(u,v)\in E}}\!{\textstyle\sum\limits_{c}} r_{uc} r_{vc}, \hspace{5pt} f_2 = {\textstyle\sum\limits_{c}}\!\left(\tfrac{\deg(c)}{2M}\right)^{\!2}\!, \hspace{5pt} f_3 = \tfrac{1}{N}\!{\textstyle\sum\limits_{v \in V}} \max(0, |M(v)| - 1),
 \end{equation}
-where $\deg(c) = \sum_{v:\, c \in M(v)} d_v r_{vc}$ is the soft volume of community $c$. Minimizing $f_1$ maximizes intra-community edge density, minimizing $f_2$ suppresses over-expanded clusters, and minimizing $f_3$ regularizes multi-membership complexity. All three objectives $(f_1, f_2, f_3)$ are optimized jointly throughout the NSGA-II search.
+where $\deg(c) = \sum_{v:\, c \in M(v)} d_v r_{vc}$ is the soft volume of community $c$. Minimizing $f_1$ maximizes intra-community edge density, minimizing $f_2$ suppresses over-expanded clusters, and minimizing $f_3$ regularizes multi-membership complexity.
+
+NSGA-II optimizes $(f_1, f_2, f_3)$ simultaneously as a vector-valued objective $\mathbf{F}(\mathcal{C}) = (f_1, f_2, f_3)$ via Pareto dominance and crowding-distance diversity sorting. During evolution, $f_3$ acts as a structural complexity regularizer: candidate covers with superfluous overlaps are Pareto-dominated and eliminated from the population, preventing overlap bloat. Following evolutionary search, all solutions on the Rank-1 non-dominated Pareto front ($\mathcal{F}_1$) represent parsimonious, bloat-free topological trade-offs. The final representative partition is then extracted from $\mathcal{F}_1$ by maximizing reconstructed modularity $Q(\mathcal{C}) = 1 - f_1(\mathcal{C}) - f_2(\mathcal{C})$, adhering to the established selection convention of HP-MOCD \cite{santos2025}.
 
 \subsection{Genetic Operators and Environmental Selection}\label{subsec:operators}
 OHP-MOCD uses genetic operators that act directly on the node-to-memberships chromosome:
@@ -126,14 +132,15 @@ OHP-MOCD uses genetic operators that act directly on the node-to-memberships chr
     \item \textbf{Initialization:} Each vertex $v$ receives a random primary label $c_v^{(1)}$. Under the default boundary-seeded strategy, if the neighborhood $\mathcal{N}(v)$ contains more than one distinct primary community, then with probability $p_{\mathrm{init}} = 0.10$, the strongest runner-up neighboring community is seeded as a secondary membership.
     \item \textbf{Parent Selection:} Four distinct parents are selected via binary tournament selection based on Pareto dominance rank and crowding distance.
     \item \textbf{4-Parent Ensemble Crossover:} With probability $p_c = 0.90$, crossover tallies parent community occurrences: $a_{v,c} = \sum_{i=1}^{4} \mathbb{I}\big(c \in M_i(v)\big)$. The offspring's primary community is the majority vote $c_v^{(1)} \in \arg\max_c a_{v,c}$ (ties broken uniformly at random). Any non-primary community supported by at least two parents ($a_{v,c} \ge 2$) survives as a secondary membership: $M_{\mathrm{child}}(v) = \{c_v^{(1)}\} \cup \{c \neq c_v^{(1)} : a_{v,c} \ge 2\}$.
-    \item \textbf{Local-Neighborhood Mutation:} For each vertex selected with probability $p_m = 0.30$, OHP-MOCD counts neighbor community affiliations $m_{v,c} = |\{u \in \mathcal{N}(v) : c \in M(u)\}|$. The primary community is reassigned to the local neighborhood majority $c_v^{(1)} \in \arg\max_c m_{v,c}$, while secondary memberships are updated to retain any community with $m_{v,c} \ge 2$: $M_{\mathrm{mut}}(v) = \{c_v^{(1)}\} \cup \{c \neq c_v^{(1)} : m_{v,c} \ge 2\}$.
+    \item \textbf{Local-Neighborhood Mutation:} For each vertex selected with probability $p_m = 0.30$, OHP-MOCD counts neighbor community affiliations $m_{v,c} = |\{u \in \mathcal{N}(v) : c \in M(u)\}|$, then applies one combined update covering \emph{primary reassignment}, \emph{secondary addition}, and \emph{secondary removal} in a single pass. The primary community is reassigned to the local neighborhood majority $c_v^{(1)} \in \arg\max_c m_{v,c}$, while secondary memberships are recomputed from scratch, retaining only communities with $m_{v,c} \ge 2$ -- so unsupported memberships are dropped and newly supported ones are added in the same step: $M_{\mathrm{mut}}(v) = \{c_v^{(1)}\} \cup \{c \neq c_v^{(1)} : m_{v,c} \ge 2\}$.
 \end{enumerate}
 Standard NSGA-II fast non-dominated sorting and crowding distance truncation are applied to select the top $P$ survivors from the combined $2P$ population. Following evolution, a memetic boundary refinement step prunes weak secondary memberships where internal support is below $d_v / |M(v)|$.
 
+\enlargethispage{2\baselineskip}
 \subsection{Overlap-Support Mechanisms and Complexity Analysis}\label{subsec:overlap_and_complexity}
-\noindent\textbf{1) Dual-Weighted Interaction (DWI):} For vertex $v$ and candidate community $c$, DWI combines topological neighborhood proportion and degree-weighted neighbor influence: $s_{v,c} = \alpha \frac{|\{u \in \mathcal{N}(v) : c \in M(u)\}|}{d_v} + (1-\alpha) \frac{\sum_{u \in \mathcal{N}(v), c \in M(u)} d_u}{\sum_{u \in \mathcal{N}(v)} d_u}$, where $\alpha \in [0, 1]$ balances direct edge consensus and hub influence.
+\noindent\textbf{1) Dual-Weighted Interaction (DWI):} For vertex $v$ and candidate community $c$, DWI combines topological neighborhood proportion and degree-weighted neighbor influence: $s_{v,c} = \alpha \tfrac{|\{u \in \mathcal{N}(v) : c \in M(u)\}|}{d_v} + (1-\alpha) \tfrac{\sum_{u \in \mathcal{N}(v), c \in M(u)} d_u}{\sum_{u \in \mathcal{N}(v)} d_u}$, where $\alpha$ weights raw edge-count agreement among neighbors and $(1-\alpha)$ weights influence from high-degree (hub) neighbors, with $\alpha \in [0, 1]$ setting the balance between the two.
 
-\noindent\textbf{2) Parameter-Free Statistical Null Boundary Bound:} Let $K_v$ be the number of distinct communities adjacent to node $v$. Under the null configuration model where the $d_v$ incident edges are randomly distributed across $K_v$ candidate clusters, the empirical membership proportion follows a multinomial distribution with mean $\mu = \frac{1}{K_v}$ and variance $\sigma^2 \le \frac{1}{4 d_v}$. By the Central Limit Theorem and Chebyshev's inequality, the threshold separating statistically significant multi-membership from stochastic degree noise is bounded by $\theta_v = \frac{1}{K_v} + \frac{1}{\sqrt{d_v}}$. A vertex $v$ is admitted into secondary community $C_c$ if and only if $\frac{|\mathcal{N}(v) \cap C_c|}{d_v} \ge \theta_v$ with $|\mathcal{N}(v) \cap C_c| \ge 2$, eliminating heuristic manual cutoff tuning.
+\noindent\textbf{2) Parameter-Free Statistical Null Boundary Bound:} Let $K_v$ be the number of distinct communities adjacent to node $v$. Under the null configuration model where the $d_v$ incident edges are randomly distributed across $K_v$ candidate clusters, the empirical membership proportion follows a multinomial distribution with mean $\mu = \frac{1}{K_v}$ and variance $\sigma^2 \le \frac{1}{4 d_v}$. By Chebyshev's inequality, the threshold separating statistically significant multi-membership from stochastic degree noise is bounded by $\theta_v = \frac{1}{K_v} + \frac{1}{\sqrt{d_v}}$, with the chance of exceeding it by pure noise at most $\frac{1}{4}$ regardless of the underlying distribution. A vertex $v$ is admitted into secondary community $C_c$ if and only if $\frac{|\mathcal{N}(v) \cap C_c|}{d_v} \ge \theta_v$ with $|\mathcal{N}(v) \cap C_c| \ge 2$, eliminating heuristic manual cutoff tuning.
 
 \noindent\textbf{3) Complexity Analysis:} Evaluating an individual costs $\mathcal{O}(N\bar{k} + M\bar{k}_{\deg})$, where $\bar{k} = \frac{1}{N}\sum_u |\mathcal{C}(u)|$ is the mean membership count and $\bar{k}_{\deg} = \frac{1}{M}\sum_{(u,v)\in E} |\mathcal{C}(u)|$ is the degree-weighted overlap. Because overlap remains sparse ($\bar{k} \approx 1$), evaluation scales linearly as $\mathcal{O}(N + M)$ in practice. Four-parent ensemble crossover takes $\mathcal{O}(N)$ per child, and local-neighborhood mutation takes $\mathcal{O}(N + p_m M)$ per child. Both reproduction and fitness evaluation are parallelized across threads via Rayon, while NSGA-II non-dominated sorting and crowding distance require $\mathcal{O}(mP^2)$. Across $G$ generations with $m = 3$ objectives, the total asymptotic runtime complexity is:
 \begin{equation}\label{eq:complexity}
@@ -142,10 +149,10 @@ Standard NSGA-II fast non-dominated sorting and crowding distance truncation are
 Because graph size $(N + M)$ dominates population size $P$, runtime scales with linear edge scans, enabling OHP-MOCD to scale significantly better than baselines reliant on clique enumeration or all-pairs shortest paths.
 
 \section{Experimental Evaluation and Results Discussion}\label{sec:experiments}
-Following the empirical structure of Santos et al. \cite{santos2025}, we organize our evaluation into three complementary fronts: (1) an \textbf{intra-paradigm head-to-head comparison} against state-of-the-art MOEAs; (2) a \textbf{cross-paradigm benchmark evaluation} against competitive heuristics, link medoids, and graph neural networks; and (3) a rigorous \textbf{topological modularity, runtime scalability, and synthetic LFR robustness profile}.
+Following the empirical structure of Santos et al. \cite{santos2025}, we organize our evaluation into three complementary fronts: (1) an \textbf{intra-paradigm head-to-head comparison} against state-of-the-art MOEAs; (2) a \textbf{cross-paradigm benchmark evaluation} against competitive heuristics, link medoids, and graph neural networks; and (3) a rigorous \textbf{topological modularity, runtime scalability, and synthetic $\text{ABCD}+o^2$ robustness profile}.
 
 \subsection{Experimental Setup, Datasets, and Baseline Suite}\label{subsec:setup}
-We benchmark OHP-MOCD against six authentic baseline methods across four major algorithmic paradigms: (1) \textbf{Structural MOEAs:} MCMOEA \cite{wen2016}, EF-MOCD \cite{tian2020}, and MO-EE \cite{bello2018}; (2) \textbf{Dynamic Label Propagation:} SLPA \cite{xie2011}; (3) \textbf{Link Medoids:} LPAM \cite{ponomarenko2021}; (4) \textbf{Graph Neural Networks:} NOCD \cite{shchur2019}. Evaluation metrics include Overlapping Normalized Mutual Information ($ONMI$) \cite{lancichinetti2009onmi}, Pairwise $F_1$-Score, and Shen's Extended Modularity ($EQ$) \cite{shen2009,nicosia2009}. All evolutionary algorithms were evaluated under a common nominal search budget of population size $N_{\text{pop}} = 100$ and $T_{\text{max}} = 100$ generations. Stochastic algorithms were evaluated across 15 independent seeds for small-to-medium networks and 10 seeds for large networks (FB 1684, FB 1912, DBLP). All executions were performed on an identical hardware environment (Intel Xeon / AMD Ryzen 8-core, 32GB RAM). Full source code, baseline implementations, and reproduction scripts are publicly available at \url{https://github.com/aanasakhtar/ohp-mocd}. Topological characteristics of the 12 evaluated real-world ground-truth networks are summarized in Table~\ref{tab:datasets}.
+We benchmark OHP-MOCD against six authentic baseline methods across four major algorithmic paradigms: (1) \textbf{Structural MOEAs:} MCMOEA \cite{wen2016}, EF-MOCD \cite{tian2020}, and MO-EE \cite{bello2018}; (2) \textbf{Dynamic Label Propagation:} SLPA \cite{xie2012}; (3) \textbf{Link Medoids:} LPAM \cite{ponomarenko2021}; (4) \textbf{Graph Neural Networks:} NOCD \cite{shchur2019}. Evaluation metrics include Overlapping Normalized Mutual Information ($ONMI$) \cite{lancichinetti2009onmi}, Pairwise $F_1$-Score, and Shen's Extended Modularity ($EQ$) \cite{shen2009,nicosia2009}. All evolutionary algorithms were evaluated under a common nominal search budget of population size $N_{\text{pop}} = 100$ and $T_{\text{max}} = 100$ generations. Stochastic algorithms were evaluated across 15 independent seeds for small-to-medium networks and 10 seeds for large networks (FB 1684, FB 1912, DBLP). All executions were performed on an identical hardware environment (Intel Xeon / AMD Ryzen 8-core, 32GB RAM). Full source code, baseline implementations, and reproduction scripts are publicly available at \url{https://github.com/aanasakhtar/ohp-mocd}. Topological characteristics of the 12 evaluated real-world ground-truth networks are summarized in Table~\ref{tab:datasets}.
 
 \begin{table}[t]
 \centering
@@ -266,7 +273,7 @@ DBLP & MCMOEA (2016) & $0.3239 \pm 0.0022$ & $0.1000 \pm 0.0023$ & $0.1780 \pm 0
 \end{table}
 
 \subsection{Front 2: Cross-Paradigm Benchmark Evaluation}\label{subsec:cross_paradigm}
-Table~\ref{tab:cross_paradigm_results} evaluates OHP-MOCD against non-evolutionary paradigms across all 12 benchmark networks: SLPA \cite{xie2011}, LPAM \cite{ponomarenko2021}, and NOCD \cite{shchur2019}. Fig.~\ref{fig:real_world_4panel} visualizes ground-truth recovery metrics and topological scalability across all algorithms.
+Table~\ref{tab:cross_paradigm_results} evaluates OHP-MOCD against non-evolutionary paradigms across all 12 benchmark networks: SLPA \cite{xie2012}, LPAM \cite{ponomarenko2021}, and NOCD \cite{shchur2019}. Fig.~\ref{fig:real_world_4panel} visualizes ground-truth recovery metrics and topological scalability across all algorithms.
 
 Across algorithmic paradigms, the results demonstrate distinct and complementary strengths rather than universal dominance. SLPA achieves the highest $ONMI$ on several classical and social benchmarks, whereas OHP-MOCD obtains the highest $ONMI$ on \textit{Facebook 414} ($0.5146$) and the highest Pairwise $F_1$-score on \textit{Facebook 348} ($0.8712$), \textit{Facebook 686} ($0.7035$), \textit{Facebook 698} ($0.6651$), and \textit{DBLP} ($0.3443$). Furthermore, OHP-MOCD achieves top Extended Modularity ($EQ$) on classical benchmarks including \textit{Karate Club} ($0.3886$), \textit{Dolphins} ($0.5192$), \textit{Polbooks} ($0.4942$), and \textit{Facebook 698} ($0.5154$). These results indicate that OHP-MOCD is especially effective at discovering dense, coherent modules in complex social ego-networks and collaboration graphs without manual threshold tuning.
 
@@ -360,7 +367,7 @@ DBLP & SLPA (2011) & $\mathbf{0.2884 \pm 0.0089}$ & $0.2776 \pm 0.0829$ & $\math
 \subsection{Front 3A: Topological Modularity Quality and Scalability}\label{subsec:modularity_and_runtime}
 OHP-MOCD demonstrates competitive topological modularity, obtaining top $EQ$ on \textit{Karate Club} ($EQ = 0.3886$), \textit{Dolphins} ($EQ = 0.5192$), \textit{Polbooks} ($EQ = 0.4942$), and \textit{Facebook 698} ($EQ = 0.5154$). In computational scalability, while lightweight heuristics such as NOCD and SLPA execute in under a second on smaller graphs, OHP-MOCD is substantially faster than competing evolutionary algorithms, scaling to $30{,}000$ edges in $27.06\text{s}$ (compared to $182.49\text{s}$ for EF-MOCD and $67.47\text{s}$ for MO-EE), as visualized in Fig.~\ref{fig:real_world_4panel}.
 
-\begin{figure}[t]
+\begin{figure}[!t]
 \centering
 \begin{subfigure}[b]{0.48\textwidth}
     \centering
@@ -390,10 +397,16 @@ OHP-MOCD demonstrates competitive topological modularity, obtaining top $EQ$ on 
 \label{fig:real_world_4panel}
 \end{figure}
 
-\subsection{Front 3B: Robustness on Synthetic LFR Benchmark Networks}\label{subsec:lfr_sweeps}
-To evaluate resilience against topological noise, we conducted parameter sweeps on synthetic LFR benchmark graphs \cite{lancichinetti2008lfr} ($N = 300$, $\langle d \rangle = 12$, community sizes $\in [20, 50]$) across mixing parameter values $\mu \in [0.1, 0.6]$. Table~\ref{tab:lfr_results} provides the quantitative scorecard, while Fig.~\ref{fig:lfr_curves} depicts the degradation curves for $ONMI$, $F_1$, and $EQ$.
+\subsection{Front 3B: Robustness on Modern Synthetic $\text{ABCD}+o^2$ Benchmark Networks}\label{subsec:abcd_sweeps}
+To evaluate resilience against topological noise on networks with authentic overlapping ground-truth, we conducted systematic parameter sweeps on the modern $\text{ABCD}+o^2$ benchmark framework \cite{barrett2026abcd} ($N = 300$, $\tau_1 = 2.5$, $\tau_2 = 1.5$, degree range $[5, 30]$, community sizes $[20, 60]$, overlap expansion multiplier $\eta = 1.50$, yielding $\approx 43.3\%$ multi-membership nodes) across background noise parameter values $\xi \in [0.1, 0.6]$. Table~\ref{tab:abcd_results} reports the quantitative scorecard across five independent random seeds per noise level, while Fig.~\ref{fig:abcd_curves} depicts the performance degradation trajectories for $ONMI$, Pairwise $F_1$, and Extended Modularity $EQ$.
 
-At low-to-moderate noise ($\mu \le 0.3$), OHP-MOCD performs strongly and consistently outperforms all competing evolutionary baselines in $ONMI$ and Pairwise $F_1$, achieving $ONMI = 0.9350$ at $\mu = 0.1$ and $0.5976$ at $\mu = 0.2$ (surpassing EF-MOCD: $0.4120$, MO-EE: $0.2495$, MCMOEA: $0.2206$). Although SLPA maintains higher $ONMI$ across the sweep, OHP-MOCD demonstrates a more stable structural modularity profile, maintaining positive modularity ($EQ \ge 0.1293$) across the full range of $\mu$, whereas SLPA collapses to negative modularity ($EQ < 0$) for $\mu \ge 0.4$.
+Evaluating performance across $\text{ABCD}+o^2$ mixing levels reveals three primary characteristics:
+
+\noindent\textbf{Ground-Truth Superiority at Low-to-Moderate Noise ($\xi \le 0.3$):} At $\xi = 0.1$, OHP-MOCD ranks first across all seven compared algorithms in every structural metric ($ONMI = 0.4817 \pm 0.0659$, $F_1 = 0.6646 \pm 0.0524$), outperforming SLPA ($0.4699, 0.6222$) and all competing MOEAs ($ONMI \le 0.2217$). This advantage persists at $\xi = 0.2$, where OHP-MOCD retains the top rank across all methods ($ONMI = 0.4263 \pm 0.0196, F_1 = 0.6295 \pm 0.0326$), and at $\xi = 0.3$, achieving the highest $F_1$ ($0.4333 \pm 0.0600$).
+
+\noindent\textbf{Modularity Stability Under Severe Noise ($\xi \ge 0.4$):} While SLPA degrades severely as mixing increases---with its extended modularity collapsing to near zero ($EQ = 0.0002 \pm 0.0004$ at $\xi = 0.6$) due to spurious label propagation---OHP-MOCD maintains resilient modular structure ($EQ \ge 0.2716$ across all noise levels), securing top modularity for every $\xi \in [0.1, 0.6]$.
+
+\noindent\textbf{Evolutionary Scalability:} OHP-MOCD terminates in $1.5\text{s}$--$3.4\text{s}$, executing up to $22.4\times$ faster than EF-MOCD ($50.12\text{s}$) and $4.6\times$ faster than MCMOEA ($10.35\text{s}$).
 
 % --- Full Table 4 (renders directly before Conclusion) ---
 \begin{table}[t]
@@ -401,60 +414,60 @@ At low-to-moderate noise ($\mu \le 0.3$), OHP-MOCD performs strongly and consist
 \fontsize{6.2pt}{7.2pt}\selectfont
 \renewcommand{\arraystretch}{0.48}
 \setlength{\tabcolsep}{2.0pt}
-\caption{Comparative performance on synthetic LFR benchmark networks across mixing parameter values $\mu \in [0.1, 0.6]$ (mean $\pm$ std across 5 independent seeds; runtime reports mean wall-clock execution time). Boldface indicates the best mean value among all compared methods.}
-\label{tab:lfr_results}
+\caption{Comparative performance on modern synthetic $\text{ABCD}+o^2$ benchmark networks across background mixing parameter values $\xi \in [0.1, 0.6]$ with overlap multiplier $\eta = 1.50$ (mean $\pm$ std across 5 independent seeds; runtime reports mean wall-clock execution time). Boldface indicates the best mean value among all compared methods.}
+\label{tab:abcd_results}
 \resizebox{0.94\textwidth}{!}{%
 \begin{tabular}{@{}clcccc@{}}
 \toprule
-\textbf{Mixing Parameter ($\mu$)} & \textbf{Algorithm} & \textbf{ONMI} & \textbf{Pairwise $F_1$} & \textbf{Modularity ($EQ$)} & \textbf{Runtime (s)} \\
+\textbf{Mixing Parameter ($\xi$)} & \textbf{Algorithm} & \textbf{ONMI} & \textbf{Pairwise $F_1$} & \textbf{Modularity ($EQ$)} & \textbf{Runtime (s)} \\
 \midrule
-$\mu = 0.1$ & EF-MOCD (2020) & $0.4120 \pm 0.0218$ & $0.5487 \pm 0.0243$ & $0.3794 \pm 0.0240$ & $27.03\text{s}$ \\
- & LPAM (2021) & $0.4406 \pm 0.0917$ & $0.6227 \pm 0.1040$ & $0.4109 \pm 0.0634$ & $1.41\text{s}$ \\
- & MCMOEA (2016) & $0.2206 \pm 0.0238$ & $0.3198 \pm 0.0094$ & $0.0146 \pm 0.0008$ & $12.69\text{s}$ \\
- & MO-EE (2018) & $0.2495 \pm 0.0306$ & $0.3967 \pm 0.0244$ & $0.0162 \pm 0.0025$ & $8.23\text{s}$ \\
- & NOCD (2019) & $0.5473 \pm 0.0270$ & $0.4367 \pm 0.0340$ & $0.1764 \pm 0.0356$ & $\mathbf{0.16\text{s}}$ \\
- & \textbf{OHP-MOCD (Proposed)} & $0.9350 \pm 0.0265$ & $0.9710 \pm 0.0285$ & $0.5997 \pm 0.0700$ & $2.15\text{s}$ \\
- & SLPA (2011) & $\mathbf{1.0000 \pm 0.0000}$ & $\mathbf{1.0000 \pm 0.0000}$ & $\mathbf{0.6682 \pm 0.0168}$ & $0.80\text{s}$ \\
+ $\xi = 0.1$ & EF-MOCD (2020) & $0.2107 \pm 0.0109$ & $0.4529 \pm 0.0192$ & $0.2844 \pm 0.0174$ & 50.12\text{s} \\
+  & LPAM (2021) & $0.2217 \pm 0.0166$ & $0.3527 \pm 0.0295$ & $0.3460 \pm 0.0130$ & 1.30\text{s} \\
+  & MCMOEA (2016) & $0.1625 \pm 0.0059$ & $0.2368 \pm 0.0119$ & $0.0262 \pm 0.0011$ & 6.74\text{s} \\
+  & MO-EE (2018) & $0.1915 \pm 0.0155$ & $0.3944 \pm 0.0263$ & $0.0363 \pm 0.0026$ & 7.03\text{s} \\
+  & NOCD (2019) & $0.2163 \pm 0.0085$ & $0.3433 \pm 0.0655$ & $0.1123 \pm 0.0168$ & $\mathbf{0.13\text{s}}$ \\
+  & \textbf{OHP-MOCD (Proposed)} & $\mathbf{0.4817 \pm 0.0659}$ & $\mathbf{0.6646 \pm 0.0524}$ & $\mathbf{0.5108 \pm 0.0263}$ & 2.24\text{s} \\
+  & SLPA (2011) & $0.4699 \pm 0.0432$ & $0.6222 \pm 0.0279$ & $0.4925 \pm 0.0422$ & 0.71\text{s} \\
 \midrule
-$\mu = 0.2$ & EF-MOCD (2020) & $0.1702 \pm 0.0171$ & $0.3556 \pm 0.0656$ & $0.1602 \pm 0.0570$ & $35.87\text{s}$ \\
- & LPAM (2021) & $0.2371 \pm 0.0330$ & $0.3804 \pm 0.0321$ & $0.2196 \pm 0.0226$ & $1.18\text{s}$ \\
- & MCMOEA (2016) & $0.1855 \pm 0.0145$ & $0.3043 \pm 0.0208$ & $0.0144 \pm 0.0015$ & $14.53\text{s}$ \\
- & MO-EE (2018) & $0.1533 \pm 0.0189$ & $0.3440 \pm 0.0377$ & $0.0106 \pm 0.0015$ & $7.42\text{s}$ \\
- & NOCD (2019) & $0.4577 \pm 0.0518$ & $0.4090 \pm 0.0460$ & $0.0954 \pm 0.0282$ & $\mathbf{0.02\text{s}}$ \\
- & \textbf{OHP-MOCD (Proposed)} & $0.5976 \pm 0.0837$ & $0.6017 \pm 0.1141$ & $0.3352 \pm 0.0435$ & $1.73\text{s}$ \\
- & SLPA (2011) & $\mathbf{0.8838 \pm 0.0960}$ & $\mathbf{0.8815 \pm 0.1112}$ & $\mathbf{0.4979 \pm 0.0589}$ & $0.69\text{s}$ \\
+ $\xi = 0.2$ & EF-MOCD (2020) & $0.1668 \pm 0.0058$ & $0.3948 \pm 0.0212$ & $0.2643 \pm 0.0162$ & 43.69\text{s} \\
+  & LPAM (2021) & $0.1805 \pm 0.0270$ & $0.3152 \pm 0.0340$ & $0.2873 \pm 0.0095$ & 1.30\text{s} \\
+  & MCMOEA (2016) & $0.1608 \pm 0.0071$ & $0.2387 \pm 0.0058$ & $0.0240 \pm 0.0010$ & 7.73\text{s} \\
+  & MO-EE (2018) & $0.1811 \pm 0.0144$ & $0.3678 \pm 0.0181$ & $0.0335 \pm 0.0027$ & 6.20\text{s} \\
+  & NOCD (2019) & $0.1624 \pm 0.0169$ & $0.2840 \pm 0.0284$ & $0.0674 \pm 0.0137$ & $\mathbf{0.04\text{s}}$ \\
+  & \textbf{OHP-MOCD (Proposed)} & $\mathbf{0.4263 \pm 0.0196}$ & $\mathbf{0.6295 \pm 0.0326}$ & $\mathbf{0.4629 \pm 0.0119}$ & 3.35\text{s} \\
+  & SLPA (2011) & $0.3827 \pm 0.0301$ & $0.5723 \pm 0.0358$ & $0.4186 \pm 0.0377$ & 0.72\text{s} \\
 \midrule
-$\mu = 0.3$ & EF-MOCD (2020) & $0.1158 \pm 0.0314$ & $0.3161 \pm 0.0597$ & $0.0786 \pm 0.0160$ & $19.10\text{s}$ \\
- & LPAM (2021) & $0.1082 \pm 0.0136$ & $0.2605 \pm 0.0357$ & $0.1467 \pm 0.0124$ & $0.71\text{s}$ \\
- & MCMOEA (2016) & $0.1433 \pm 0.0216$ & $0.2453 \pm 0.0254$ & $0.0127 \pm 0.0007$ & $12.67\text{s}$ \\
- & MO-EE (2018) & $0.1072 \pm 0.0235$ & $0.3005 \pm 0.0390$ & $0.0090 \pm 0.0007$ & $4.23\text{s}$ \\
- & NOCD (2019) & $0.3471 \pm 0.0654$ & $0.3077 \pm 0.0418$ & $0.0333 \pm 0.0095$ & $\mathbf{0.02\text{s}}$ \\
- & \textbf{OHP-MOCD (Proposed)} & $0.3599 \pm 0.1329$ & $\mathbf{0.4418 \pm 0.1580}$ & $\mathbf{0.1829 \pm 0.0887}$ & $1.56\text{s}$ \\
- & SLPA (2011) & $\mathbf{0.4498 \pm 0.1902}$ & $0.3721 \pm 0.1267$ & $0.0652 \pm 0.1579$ & $0.34\text{s}$ \\
+ $\xi = 0.3$ & EF-MOCD (2020) & $0.0954 \pm 0.0054$ & $0.3232 \pm 0.0187$ & $0.2029 \pm 0.0220$ & 42.81\text{s} \\
+  & LPAM (2021) & $0.1329 \pm 0.0310$ & $0.2500 \pm 0.0233$ & $0.2622 \pm 0.0175$ & 1.48\text{s} \\
+  & MCMOEA (2016) & $0.1500 \pm 0.0064$ & $0.2247 \pm 0.0052$ & $0.0227 \pm 0.0007$ & 7.57\text{s} \\
+  & MO-EE (2018) & $0.1527 \pm 0.0148$ & $0.3105 \pm 0.0214$ & $0.0324 \pm 0.0014$ & 6.43\text{s} \\
+  & NOCD (2019) & $0.1323 \pm 0.0390$ & $0.2175 \pm 0.0202$ & $0.0437 \pm 0.0118$ & $\mathbf{0.05\text{s}}$ \\
+  & \textbf{OHP-MOCD (Proposed)} & $0.2679 \pm 0.0602$ & $\mathbf{0.4333 \pm 0.0600}$ & $\mathbf{0.3636 \pm 0.0498}$ & 1.87\text{s} \\
+  & SLPA (2011) & $\mathbf{0.2774 \pm 0.0624}$ & $0.3471 \pm 0.0598$ & $0.2511 \pm 0.1090$ & 0.69\text{s} \\
 \midrule
-$\mu = 0.4$ & EF-MOCD (2020) & $0.0628 \pm 0.0521$ & $\mathbf{0.3474 \pm 0.0727}$ & $0.0385 \pm 0.0177$ & $19.11\text{s}$ \\
- & LPAM (2021) & $0.0779 \pm 0.0359$ & $0.2262 \pm 0.0241$ & $0.1315 \pm 0.0167$ & $1.17\text{s}$ \\
- & MCMOEA (2016) & $0.1084 \pm 0.0236$ & $0.2032 \pm 0.0175$ & $0.0123 \pm 0.0012$ & $12.56\text{s}$ \\
- & MO-EE (2018) & $0.0755 \pm 0.0166$ & $0.3183 \pm 0.0525$ & $0.0084 \pm 0.0009$ & $4.26\text{s}$ \\
- & NOCD (2019) & $0.1843 \pm 0.0546$ & $0.3361 \pm 0.0616$ & $0.0103 \pm 0.0078$ & $\mathbf{0.02\text{s}}$ \\
- & \textbf{OHP-MOCD (Proposed)} & $0.0815 \pm 0.0354$ & $0.2734 \pm 0.0534$ & $\mathbf{0.1564 \pm 0.0338}$ & $1.51\text{s}$ \\
- & SLPA (2011) & $\mathbf{0.4134 \pm 0.1936}$ & $0.3450 \pm 0.0715$ & $-0.0045 \pm 0.0029$ & $0.34\text{s}$ \\
+ $\xi = 0.4$ & EF-MOCD (2020) & $0.0462 \pm 0.0166$ & $0.2884 \pm 0.0185$ & $0.0771 \pm 0.0374$ & 47.67\text{s} \\
+  & LPAM (2021) & $0.0836 \pm 0.0114$ & $0.2144 \pm 0.0203$ & $0.2247 \pm 0.0113$ & 2.03\text{s} \\
+  & MCMOEA (2016) & $0.1377 \pm 0.0054$ & $0.2070 \pm 0.0063$ & $0.0191 \pm 0.0017$ & 10.08\text{s} \\
+  & MO-EE (2018) & $0.1306 \pm 0.0029$ & $0.2841 \pm 0.0125$ & $0.0277 \pm 0.0035$ & 7.36\text{s} \\
+  & NOCD (2019) & $0.0824 \pm 0.0090$ & $0.2057 \pm 0.0397$ & $0.0239 \pm 0.0027$ & $\mathbf{0.05\text{s}}$ \\
+  & \textbf{OHP-MOCD (Proposed)} & $0.1473 \pm 0.0349$ & $\mathbf{0.3414 \pm 0.0458}$ & $\mathbf{0.2852 \pm 0.0297}$ & 2.24\text{s} \\
+  & SLPA (2011) & $\mathbf{0.2117 \pm 0.0563}$ & $0.3295 \pm 0.0366$ & $0.1900 \pm 0.0257$ & 0.74\text{s} \\
 \midrule
-$\mu = 0.5$ & EF-MOCD (2020) & $0.0275 \pm 0.0239$ & $0.3024 \pm 0.0288$ & $0.0323 \pm 0.0115$ & $19.30\text{s}$ \\
- & LPAM (2021) & $0.0548 \pm 0.0163$ & $0.1997 \pm 0.0203$ & $0.1239 \pm 0.0128$ & $0.77\text{s}$ \\
- & MCMOEA (2016) & $0.0993 \pm 0.0145$ & $0.1632 \pm 0.0063$ & $0.0117 \pm 0.0003$ & $12.74\text{s}$ \\
- & MO-EE (2018) & $0.0624 \pm 0.0098$ & $0.2699 \pm 0.0316$ & $0.0074 \pm 0.0008$ & $4.31\text{s}$ \\
- & NOCD (2019) & $0.1047 \pm 0.0513$ & $0.2868 \pm 0.0421$ & $0.0066 \pm 0.0024$ & $\mathbf{0.02\text{s}}$ \\
- & \textbf{OHP-MOCD (Proposed)} & $0.0688 \pm 0.0270$ & $0.2398 \pm 0.0466$ & $\mathbf{0.1293 \pm 0.0613}$ & $1.55\text{s}$ \\
- & SLPA (2011) & $\mathbf{0.5000 \pm 0.0000}$ & $\mathbf{0.3056 \pm 0.0324}$ & $-0.0037 \pm 0.0008$ & $0.34\text{s}$ \\
+ $\xi = 0.5$ & EF-MOCD (2020) & $0.0367 \pm 0.0138$ & $\mathbf{0.2848 \pm 0.0251}$ & $0.0497 \pm 0.0089$ & 46.78\text{s} \\
+  & LPAM (2021) & $0.0682 \pm 0.0123$ & $0.1952 \pm 0.0107$ & $0.2210 \pm 0.0046$ & 2.05\text{s} \\
+  & MCMOEA (2016) & $0.1254 \pm 0.0085$ & $0.1854 \pm 0.0097$ & $0.0182 \pm 0.0006$ & 10.35\text{s} \\
+  & MO-EE (2018) & $0.1027 \pm 0.0091$ & $0.2588 \pm 0.0075$ & $0.0282 \pm 0.0017$ & 7.50\text{s} \\
+  & NOCD (2019) & $0.0635 \pm 0.0094$ & $0.1943 \pm 0.0070$ & $0.0182 \pm 0.0063$ & $\mathbf{0.05\text{s}}$ \\
+  & \textbf{OHP-MOCD (Proposed)} & $0.0868 \pm 0.0211$ & $0.2320 \pm 0.0297$ & $\mathbf{0.2934 \pm 0.0187}$ & 2.22\text{s} \\
+  & SLPA (2011) & $\mathbf{0.1811 \pm 0.1819}$ & $0.2820 \pm 0.0248$ & $0.1215 \pm 0.0759$ & 0.87\text{s} \\
 \midrule
-$\mu = 0.6$ & EF-MOCD (2020) & $0.0128 \pm 0.0044$ & $0.2856 \pm 0.0483$ & $0.0270 \pm 0.0034$ & $19.57\text{s}$ \\
- & LPAM (2021) & $0.0318 \pm 0.0059$ & $0.1733 \pm 0.0365$ & $0.1090 \pm 0.0149$ & $1.10\text{s}$ \\
- & MCMOEA (2016) & $0.0745 \pm 0.0121$ & $0.1470 \pm 0.0091$ & $0.0116 \pm 0.0006$ & $13.66\text{s}$ \\
- & MO-EE (2018) & $0.0520 \pm 0.0068$ & $0.2624 \pm 0.0402$ & $0.0074 \pm 0.0007$ & $4.38\text{s}$ \\
- & NOCD (2019) & $0.0345 \pm 0.0056$ & $0.2825 \pm 0.0467$ & $0.0039 \pm 0.0032$ & $\mathbf{0.01\text{s}}$ \\
- & \textbf{OHP-MOCD (Proposed)} & $0.0300 \pm 0.0121$ & $0.1607 \pm 0.0193$ & $\mathbf{0.1565 \pm 0.0125}$ & $1.51\text{s}$ \\
- & SLPA (2011) & $\mathbf{0.5000 \pm 0.0000}$ & $\mathbf{0.2879 \pm 0.0487}$ & $-0.0030 \pm 0.0007$ & $0.34\text{s}$ \\
+ $\xi = 0.6$ & EF-MOCD (2020) & $0.0225 \pm 0.0123$ & $0.2796 \pm 0.0155$ & $0.0467 \pm 0.0145$ & 25.48\text{s} \\
+  & LPAM (2021) & $0.0562 \pm 0.0065$ & $0.1945 \pm 0.0062$ & $0.1968 \pm 0.0036$ & 0.80\text{s} \\
+  & MCMOEA (2016) & $0.1175 \pm 0.0042$ & $0.1710 \pm 0.0060$ & $0.0178 \pm 0.0007$ & 7.00\text{s} \\
+  & MO-EE (2018) & $0.0915 \pm 0.0031$ & $0.2423 \pm 0.0074$ & $0.0257 \pm 0.0028$ & 3.76\text{s} \\
+  & NOCD (2019) & $0.0504 \pm 0.0090$ & $0.1847 \pm 0.0145$ & $0.0111 \pm 0.0029$ & $\mathbf{0.02\text{s}}$ \\
+  & \textbf{OHP-MOCD (Proposed)} & $0.0482 \pm 0.0040$ & $0.1913 \pm 0.0255$ & $\mathbf{0.2716 \pm 0.0167}$ & 1.59\text{s} \\
+  & SLPA (2011) & $\mathbf{0.2019 \pm 0.1729}$ & $\mathbf{0.2827 \pm 0.0135}$ & $0.0002 \pm 0.0004$ & 0.38\text{s} \\
 \bottomrule
 \end{tabular}%
 }
@@ -464,68 +477,47 @@ $\mu = 0.6$ & EF-MOCD (2020) & $0.0128 \pm 0.0044$ & $0.2856 \pm 0.0483$ & $0.02
 \centering
 \begin{subfigure}[b]{0.32\textwidth}
     \centering
-    \includegraphics[width=\textwidth,height=4.2cm,keepaspectratio]{fig5_lfr_onmi_vs_mu.png}
-    \caption{$ONMI$ vs. $\mu$}
-    \label{fig:lfr_onmi}
+    \includegraphics[width=\textwidth,height=4.2cm,keepaspectratio]{fig_abcd_onmi_vs_xi.png}
+    \caption{$ONMI$ vs. $\xi$}
+    \label{fig:abcd_onmi}
 \end{subfigure}\hfill
 \begin{subfigure}[b]{0.32\textwidth}
     \centering
-    \includegraphics[width=\textwidth,height=4.2cm,keepaspectratio]{fig6_lfr_f1_vs_mu.png}
-    \caption{Pairwise $F_1$ vs. $\mu$}
-    \label{fig:lfr_f1}
+    \includegraphics[width=\textwidth,height=4.2cm,keepaspectratio]{fig_abcd_f1_vs_xi.png}
+    \caption{Pairwise $F_1$ vs. $\xi$}
+    \label{fig:abcd_f1}
 \end{subfigure}\hfill
 \begin{subfigure}[b]{0.32\textwidth}
     \centering
-    \includegraphics[width=\textwidth,height=4.2cm,keepaspectratio]{fig7_lfr_eq_modularity_vs_mu.png}
-    \caption{Modularity $EQ$ vs. $\mu$}
-    \label{fig:lfr_eq}
+    \includegraphics[width=\textwidth,height=4.2cm,keepaspectratio]{fig_abcd_eq_modularity_vs_xi.png}
+    \caption{Modularity $EQ$ vs. $\xi$}
+    \label{fig:abcd_eq}
 \end{subfigure}
-\caption{Synthetic LFR Benchmark: Community recovery metrics ($ONMI$, $F_1$, and $EQ$) as a function of topological mixing parameter $\mu \in [0.1, 0.6]$ across seven evaluated methods (six baselines plus proposed OHP-MOCD).}
-\label{fig:lfr_curves}
+\caption{Community recovery metrics and modularity on synthetic $ABCD + o^2$ benchmarks across mixing parameter $\xi$ ($\eta = 1.50$).}
+\label{fig:abcd_curves}
 \end{figure}
 
 \FloatBarrier % Flushes Table 4 and Fig 2 before Conclusion & References
 
 \section{Conclusion}\label{sec:conclusion}
-In this paper, we presented \textbf{OHP-MOCD}, a principled algorithmic extension of HP-MOCD \cite{santos2025} for overlapping community detection in complex networks. By combining a direct node-to-memberships chromosome, a tri-objective formulation with overlap parsimony regularization, Dual-Weighted Interaction, and an analytically derived statistical boundary bound based on the Central Limit Theorem, OHP-MOCD eliminates heuristic threshold tuning while preserving high-performance evolutionary search. Comprehensive experiments on 12 real-world ground-truth networks and synthetic LFR sweeps established that OHP-MOCD achieves substantial improvements in ground-truth recovery and modularity quality over existing evolutionary multi-objective methods while delivering up to $27.5\times$ computational speedups.
+In this paper, we presented \textbf{OHP-MOCD}, a principled algorithmic extension of HP-MOCD \cite{santos2025} for overlapping community detection in complex networks. By combining a direct node-to-memberships chromosome, a tri-objective formulation with overlap parsimony regularization, Dual-Weighted Interaction, and an analytically derived statistical boundary bound based on Chebyshev's inequality, OHP-MOCD eliminates heuristic threshold tuning while preserving high-performance evolutionary search. Comprehensive experiments on 12 real-world ground-truth networks and modern synthetic $\text{ABCD}+o^2$ sweeps established that OHP-MOCD achieves substantial improvements in ground-truth recovery and modularity quality over existing evolutionary multi-objective methods while delivering up to $27.5\times$ computational speedups. While lightweight label propagation heuristics such as SLPA \cite{xie2012} achieve superior ground-truth recovery on many empirical graphs, OHP-MOCD demonstrates greater modularity resilience under heavy topological noise and significantly narrows the historical efficiency gap between fast heuristics and evolutionary multi-objective algorithms.
 
-{\scriptsize
 \begin{thebibliography}{99}
 \setlength{\itemsep}{-0.5pt}
 \setlength{\parsep}{0pt}
 \setlength{\parskip}{0pt}
 
 % --- 1. Foundational Predecessors & Evolutionary Optimization ---
-\bibitem{fortunato2010}
-Fortunato, S.: Community detection in graphs. Physics Reports \textbf{486}(3-5), 75--174 (2010)
-
-\bibitem{newman2006}
-Newman, M.E.: Modularity and community structure in networks. Proceedings of the National Academy of Sciences \textbf{103}(23), 8577--8582 (2006)
-
-\bibitem{girvan2002}
-Girvan, M., Newman, M.E.: Community structure in social and biological networks. Proceedings of the National Academy of Sciences \textbf{99}(12), 7821--7826 (2002)
-
-\bibitem{palla2005}
-Palla, G., Der{\'e}nyi, I., Farkas, I., Vicsek, T.: Uncovering the overlapping community structure of complex networks in nature and society. Nature \textbf{435}(7043), 814--818 (2005)
-
-\bibitem{xie2013}
-Xie, J., Kelley, S., Szymanski, B.K.: Overlapping community detection in networks: The state-of-the-art and comparative study. ACM Computing Surveys \textbf{45}(4), 1--35 (2013)
-
-\bibitem{leskovec2012}
-McAuley, J., Leskovec, J.: Learning to discover social circles in ego networks. In: Advances in Neural Information Processing Systems (NeurIPS), vol. 25 (2012)
-
-\bibitem{pizzuti2012}
-Pizzuti, C.: A multiobjective genetic algorithm to find communities in complex networks. IEEE Transactions on Evolutionary Computation \textbf{16}(3), 418--430 (2012)
+\bibitem{santos2025}
+Santos, G.O., Vieira, L.S., Rossetti, G., Ferreira, C.H.G., Moreira, G.J.P.: A high-performance evolutionary multiobjective community detection algorithm. Social Network Analysis and Mining \textbf{15}(1), 110 (2025). \url{https://doi.org/10.1007/s13278-025-01519-7}
 
 \bibitem{deb2002}
 Deb, K., Pratap, A., Agarwal, S., Meyarivan, T.: A fast and elitist multiobjective genetic algorithm: NSGA-II. IEEE Transactions on Evolutionary Computation \textbf{6}(2), 182--197 (2002)
 
-\bibitem{santos2025}
-Santos, G.O., Vieira, L.S., Rossetti, G., Ferreira, C.H.G., Moreira, G.J.P.: A high-performance evolutionary multiobjective community detection algorithm. Social Network Analysis and Mining \textbf{15}(1), 110 (2025). \url{https://doi.org/10.1007/s13278-025-01519-7}
+\bibitem{pizzuti2012}
+Pizzuti, C.: A multiobjective genetic algorithm to find communities in complex networks. IEEE Transactions on Evolutionary Computation \textbf{16}(3), 418--430 (2012)
 
-\bibitem{newman2004}
-Newman, M.E.J., Girvan, M.: Finding and evaluating community structure in networks. Physical Review E \textbf{69}(2), 026113 (2004)
-
+% --- 2. Intra-Paradigm Evolutionary Baselines (Front 1) ---
 \bibitem{wen2016}
 Wen, X., Chen, W.N., Lin, Y., Gu, T., Pan, S., Li, Y., Yin, J.: A maximal clique based multiobjective evolutionary algorithm for overlapping community detection. IEEE Transactions on Evolutionary Computation \textbf{21}(5), 797--812 (2016)
 
@@ -535,8 +527,9 @@ Tian, D., Zhao, X., Zhao, Z., Shi, Z., Shen, Y.: An evolutionary multiobjective 
 \bibitem{bello2018}
 Bello-Orgaz, G., Salcedo-Sanz, S., Camacho, D.: A multiobjective genetic algorithm for overlapping community detection based on edge encoding. Information Sciences \textbf{462}, 290--314 (2018)
 
-\bibitem{xie2011}
-Xie, J., Szymanski, B.K., Liu, X.: SLPA: Uncovering Overlapping Communities in Social Networks via A Speaker-listener Interaction Dynamic Process. In: IEEE 11th International Conference on Data Mining Workshops (ICDMW), pp. 344--349 (2011)
+% --- 3. Cross-Paradigm Baselines (Front 2) ---
+\bibitem{xie2012}
+Xie, J., Szymanski, B.K.: Towards linear time overlapping community detection in social networks. In: Pacific-Asia Conference on Knowledge Discovery and Data Mining (PAKDD), pp. 25--36. Springer (2012)
 
 \bibitem{ponomarenko2021}
 Ponomarenko, A., Dix, A., Muchnik, L.: LPAM: Link partitioning around medoids for overlapping community detection. PLOS ONE \textbf{16}(4), e0248744 (2021)
@@ -544,11 +537,15 @@ Ponomarenko, A., Dix, A., Muchnik, L.: LPAM: Link partitioning around medoids fo
 \bibitem{shchur2019}
 Shchur, O., G{\"u}nnemann, S.: Overlapping community detection on complex networks with graph convolutional networks. In: Proceedings of the ACM SIGKDD International Conference on Knowledge Discovery \& Data Mining (2019)
 
-\bibitem{lancichinetti2009onmi}
-Lancichinetti, A., Fortunato, S., Kert{\'e}sz, J.: Detecting the overlapping and hierarchical community structure in complex networks. New Journal of Physics \textbf{11}(3), 033015 (2009)
+% --- 4. Metrics, Statistical Models & Synthetic Benchmarks ---
+\bibitem{newman2004}
+Newman, M.E.J., Girvan, M.: Finding and evaluating community structure in networks. Physical Review E \textbf{69}(2), 026113 (2004)
 
-\bibitem{lancichinetti2008lfr}
-Lancichinetti, A., Fortunato, S., Radicchi, F.: Benchmark graphs for testing community detection algorithms. Physical Review E \textbf{78}(4), 046110 (2008)
+\bibitem{palla2005}
+Palla, G., Der{\'e}nyi, I., Farkas, I., Vicsek, T.: Uncovering the overlapping community structure of complex networks in nature and society. Nature \textbf{435}(7043), 814--818 (2005)
+
+\bibitem{xie2013}
+Xie, J., Kelley, S., Szymanski, B.K.: Overlapping community detection in networks: The state-of-the-art and comparative study. ACM Computing Surveys \textbf{45}(4), 1--35 (2013)
 
 \bibitem{shen2009}
 Shen, H., Cheng, X., Cai, K., Hu, M.B.: Detect overlapping and hierarchical community structure in networks. Physica A: Statistical Mechanics and its Applications \textbf{388}(8), 1706--1712 (2009)
@@ -556,19 +553,37 @@ Shen, H., Cheng, X., Cai, K., Hu, M.B.: Detect overlapping and hierarchical comm
 \bibitem{nicosia2009}
 Nicosia, V., Mangioni, G., Carchiolo, V., Malgeri, M.: Extending the definition of modularity to directed graphs with overlapping communities. Journal of Statistical Mechanics: Theory and Experiment \textbf{2009}(03), P03024 (2009)
 
+\bibitem{lancichinetti2009onmi}
+Lancichinetti, A., Fortunato, S., Kert{\'e}sz, J.: Detecting the overlapping and hierarchical community structure in complex networks. New Journal of Physics \textbf{11}(3), 033015 (2009)
+
+\bibitem{barrett2026abcd}
+Barrett, J., DeWolfe, R., Kami{\'n}ski, B., Pra{\l}at, P., Smith, A., Th{\'e}berge, F.: The artificial benchmark for community detection with outliers and overlapping communities (ABCD+$o^2$). Journal of Complex Networks \textbf{14}(4), cnag023 (2026)
+
+\bibitem{fortunato2010}
+Fortunato, S.: Community detection in graphs. Physics Reports \textbf{486}(3-5), 75--174 (2010)
+
+% --- 5. 12 Real-World Benchmark Ground-Truth Datasets ---
 \bibitem{zachary1977}
-Zachary, W.W.: An information flow model for conflict and fission in small groups. Journal of Anthropological Research \textbf{33}(4), 452--473 (1977). \url{https://doi.org/10.1086/jar.33.4.3629752}
+Zachary, W.W.: An information flow model for conflict and fission in small groups. Journal of Anthropological Research \textbf{33}(4), 452--473 (1977)
 
 \bibitem{lusseau2003}
-Lusseau, D., Schneider, K., Boisseau, O.J., Haase, P., Slooten, E., Dawson, S.M.: The bottlenose dolphin community of Doubtful Sound features a large proportion of long-lasting associations. Behavioral Ecology and Sociobiology \textbf{54}(4), 396--405 (2003). \url{https://doi.org/10.1007/s00265-003-0651-y}
+Lusseau, D., Schneider, K., Boisseau, O.J., Haase, P., Slooten, E., Dawson, S.M.: The bottlenose dolphin community of Doubtful Sound features a large proportion of long-lasting associations. Behavioral Ecology and Sociobiology \textbf{54}(4), 396--405 (2003)
+
+\bibitem{newman2006}
+Newman, M.E.: Modularity and community structure in networks. Proceedings of the National Academy of Sciences \textbf{103}(23), 8577--8582 (2006)
+
+\bibitem{girvan2002}
+Girvan, M., Newman, M.E.: Community structure in social and biological networks. Proceedings of the National Academy of Sciences \textbf{99}(12), 7821--7826 (2002)
 
 \bibitem{leskovec2007}
-Leskovec, J., Kleinberg, J., Faloutsos, C.: Graph evolution: Densification and shrinking diameters. ACM Transactions on Knowledge Discovery from Data \textbf{1}(1), 2--es (2007). \url{https://snap.stanford.edu/data/email-Eu-core.html}
+Yin, H., Benson, A. R., Leskovec, J., \& Gleich, D. F. (2017). Local higher-order graph clustering. Proceedings of the 23rd ACM SIGKDD International Conference on Knowledge Discovery and Data Mining, 555–564.
+
+\bibitem{leskovec2012}
+McAuley, J., Leskovec, J.: Learning to discover social circles in ego networks. In: Advances in Neural Information Processing Systems (NeurIPS), vol. 25 (2012)
 
 \bibitem{yang2015}
-Yang, J., Leskovec, J.: Defining and evaluating network communities based on ground-truth. Knowledge and Information Systems \textbf{42}(1), 181--213 (2015). \url{https://snap.stanford.edu/data/com-DBLP.html}
+Yang, J., Leskovec, J.: Defining and evaluating network communities based on ground-truth. Knowledge and Information Systems \textbf{42}(1), 181--213 (2015)
 
 \end{thebibliography}
-}
 
 \end{document}
